@@ -1,4 +1,4 @@
-# ADR-002: Topic Naming und Event-Struktur für den Event Bus
+# ADR-002: Topic-Struktur und schlanke Payloads für den State Bus
 
 ## Status
 
@@ -10,32 +10,24 @@ Proposed
 
 ## Kontext
 
-Mit der Einführung des zentralen Event Bus (ADR-001) wird dieser zur
-zentralen Kommunikationsschnittstelle aller Module in NagaBridge.
+Mit ADR-001 wurde ein zentraler Bus als Kommunikationsmittel zwischen
+allen Modulen eingeführt.
 
-Aktuell existieren erste Topic-Namen wie:
+Das System ist auf lokale, latenzarme Verarbeitung ausgelegt:
 
-* ecoflow/powerstream/state
-* ecoflow/powerstream/set
-* mqtt/state
-* system/shutdown
+* Steuerung der Einspeisung in nahezu Echtzeit
+* Fokus auf aktuelle Zustände (State), nicht auf Historie
+* geringe Eventrate (ca. 1 Update pro Sekunde pro Gerät)
+* Betrieb auf ressourcenbeschränkter Hardware (Raspberry Pi)
 
-Diese sind funktional, aber es fehlen klare Regeln für:
+Eine klassische Event-Struktur mit umfangreicher Metadaten-Hülle
+(timestamp, source, type, payload) würde zusätzlichen Overhead erzeugen
+und die Reaktionszeit verschlechtern.
 
-* einheitliche Benennung
-* Trennung von Zuständen, Events und Commands
-* Struktur der Payloads
+## Entscheidung
 
-Ohne Konventionen besteht die Gefahr von:
-
-* uneinheitlichen Topic-Strukturen
-* schwer nachvollziehbaren Datenflüssen
-* steigender Komplexität bei neuen Modulen
-
-## Entscheidung (Vorschlag)
-
-Es wird eine einheitliche Topic-Namenskonvention sowie eine
-standardisierte Event-Struktur für alle Bus-Nachrichten definiert.
+Der Bus verwendet eine **einfache Topic-Struktur** und
+**minimale Payloads ohne verpflichtende Metadaten**.
 
 ### 1. Topic-Struktur
 
@@ -47,137 +39,126 @@ Beispiele:
 
 * ecoflow/powerstream/state
 * ecoflow/delta2max/state
+* ecoflow/powerstream/command
+* system/shutdown
 * mqtt/connection/state
-* system/lifecycle/shutdown
 
-### 2. Event-Typen
+### 2. Event-Typen über Topic definiert
 
-Jedes Topic enthält einen klar definierten Typ:
+Der Typ wird ausschließlich über das Topic bestimmt:
 
 * state
-  Repräsentiert den aktuellen Zustand eines Systems (idempotent)
-
-* event
-  Ein einmaliges Ereignis (z. B. Fehler, Verbindung verloren)
+  aktueller Zustand eines Geräts oder Systems
+  (wird überschrieben, keine Historie)
 
 * command
-  Eine Anweisung an ein Modul
+  Anweisung an ein Modul
+  (latest wins)
 
-Beispiele:
+* event
+  seltene Ereignisse (z. B. Fehler, Disconnect)
 
-* ecoflow/powerstream/state
-* ecoflow/powerstream/event
-* ecoflow/powerstream/command
+### 3. Payload-Design
 
-### 3. Event-Payload-Struktur
+Payloads enthalten nur die notwendigen Nutzdaten.
 
-Alle Nachrichten auf dem Event Bus verwenden eine einheitliche
-Grundstruktur:
-
+Beispiel (state):
 {
-"timestamp": "<ISO8601>",
-"source": "<modul.name>",
-"type": "<state|event|command>",
-"payload": { ... }
+"power": 120,
+"battery": 80,
+"pv_input": 300
 }
 
-Optionale Erweiterung:
+Beispiel (command):
 {
-"version": 1
+"set_power": 200
 }
 
-### 4. Namenskonventionen
+Es gibt **keine verpflichtenden Felder** wie:
 
-* domain: System oder Integrationsbereich (ecoflow, mqtt, system)
-* entity: konkretes Gerät oder Subsystem (powerstream, delta2max)
-* type: state, event oder command
+* timestamp
+* source
+* type
+
+Diese können bei Bedarf optional ergänzt werden.
+
+### 4. State-Semantik
+
+State-Daten sind:
+
+* vollständig überschreibbar
+* nicht historisch relevant
+* immer als aktueller Snapshot zu verstehen
+
+Ein neuer State ersetzt den vorherigen vollständig.
 
 ### 5. Erweiterbarkeit
 
-Neue Module müssen:
+Neue Module:
 
-* keine bestehenden Topics verändern
-* sich an die definierte Struktur halten
+* können neue Topics hinzufügen
+* müssen bestehende Topics nicht verändern
+
+Subscriber entscheiden selbst:
+
+* welche Topics sie konsumieren
+* wie sie die Daten interpretieren
 
 ## Betrachtete Alternativen
 
-### Alternative A: Freie Topic-Namen ohne Konvention
+### Alternative A: Vollständige Event-Hülle (timestamp, source, type, payload)
+
+**Vorteile:**
+
+* hohe Flexibilität
+* klare Struktur
+
+**Nachteile:**
+
+* zusätzlicher Overhead
+* höhere Latenz
+* unnötig komplex für State-basierte Steuerung
+
+**Verworfen:**
+Nicht passend für Low-Latency-Anforderung
+
+---
+
+### Alternative B: Freie Topic- und Payload-Struktur
 
 **Vorteile:**
 
 * maximale Flexibilität
-* schneller Start
-
-**Nachteile:**
-
-* inkonsistente Struktur
-* schwer wartbar
-* hohe Fehleranfälligkeit
-
-**Verworfen:**
-Nicht skalierbar für wachsendes System
-
----
-
-### Alternative B: Stark verschachtelte Topics
-
-Beispiel:
-ecoflow/device/powerstream/metrics/state
-
-**Vorteile:**
-
-* sehr granular
-* hohe Ausdrucksstärke
-
-**Nachteile:**
-
-* unnötig komplex
-* erschwert Debugging
-* Overhead ohne klaren Mehrwert
-
-**Verworfen:**
-Zu komplex für aktuellen Scope
-
----
-
-### Alternative C: Keine Payload-Standardisierung
-
-**Vorteile:**
-
-* maximale Freiheit für Module
 
 **Nachteile:**
 
 * inkonsistente Datenstrukturen
 * erschwert Integration neuer Module
-* hoher Debugging-Aufwand
 
 **Verworfen:**
-Führt langfristig zu Systeminstabilität
+Nicht wartbar bei wachsendem System
 
 ## Konsequenzen
 
 **Positiv:**
 
-* Einheitliche und verständliche Kommunikation
-* Einfachere Integration neuer Module
-* Bessere Debugbarkeit des Event Bus
-* Klare Trennung von Zuständen, Events und Commands
+* minimale Latenz
+* geringer Overhead
+* einfache Implementierung
+* gut geeignet für Echtzeitnahe Steuerung
 
 **Negativ:**
 
-* Initialer Mehraufwand bei Definition und Einhaltung
-* Geringere Flexibilität für spontane Änderungen
+* weniger Standardisierung
+* optionale Metadaten müssen bei Bedarf individuell ergänzt werden
 
 ## Offene Punkte
 
-* Wildcard-Subscriptions (z. B. ecoflow/*) definieren
-* Versionierung final festlegen (Topic vs Payload)
-* Umgang mit großen Payloads klären
-* Logging- und Debug-Strategie konkretisieren
+* optionale Zeitstempel bei Bedarf definieren
+* Namenskonventionen für Payload-Felder weiter vereinheitlichen
+* Umgang mit komplexeren Commands bei zukünftigen Erweiterungen
 
 ## Referenzen
 
-* Publish-Subscribe Pattern (GoF)
-* Event-Driven Architecture
-* MQTT Topic Best Practices
+* Publish-Subscribe Pattern
+* CAN Bus Prinzipien (State statt Historie)
