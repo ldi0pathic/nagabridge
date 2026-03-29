@@ -56,6 +56,13 @@ system/shutdown                # Graceful Shutdown
 Der Event Bus wird als einfaches Python-Modul implementiert
 (`asyncio`-basiert, kein externes Framework).
 
+Der MQTT-Adapter ist ein normaler Bus-Subscriber der
+Daten nach außen weiterleitet. Er ist nicht der Bus –
+er nutzt den Bus.
+
+WLAN-Ausfall betrifft nur den MQTT-Adapter.
+Der interne Bus und alle anderen Adapter laufen weiter.
+
 ## Betrachtete Alternativen
 
 ### Alternative A: Direkte Callbacks (Status quo Prototyp)
