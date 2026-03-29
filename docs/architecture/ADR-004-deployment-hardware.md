@@ -54,9 +54,9 @@ Ecoflow-Geräten.
 * noch nicht getestet
 
 **Verworfen:**
-Dongle aktuell nicht auffindbar. Pi funktioniert bereits.
-Migration möglich sobald Dongle verfügbar und USB Passthrough
-evaluiert wurde.
+USB Passthrough für Bluetooth in Proxmox LXC 
+wurde noch nicht evaluiert. Migration möglich 
+sobald getestet.
 
 ## Konsequenzen
 
@@ -71,8 +71,7 @@ evaluiert wurde.
 
 ## Offene Punkte
 
-* Migration zu Proxmox LXC evaluieren sobald USB Dongle
-  verfügbar
+* Migration zu Proxmox LXC evaluieren
 * USB Passthrough für Bluetooth in Proxmox LXC testen
 
 ## Referenzen
