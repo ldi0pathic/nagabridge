@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted 
 
 ## Datum
 
@@ -169,6 +169,13 @@ Gefährdet Systemstabilität
 * keine Garantie für Zustellung
 * mögliche Verluste von Zwischenwerten
 * Debugging erfordert Beobachtung des aktuellen Zustands
+
+**Zur Command-Zustellung:** 
+Verlorene Commands sind akzeptabel,da alle unterstützten Geräte 
+(Ecoflow Powerstream, Delta2-Serie)
+eine eigene Sicherheitslogik besitzen die einen stabilen
+Grundzustand garantiert. NagaBridge optimiert – ersetzt aber
+nicht die Gerätelogik.
 
 ## Offene Punkte
 
