@@ -24,11 +24,16 @@ def test_stub_adapter_lifecycle_health_states():
             assert adapter.health.online is False
             assert adapter.health.detail == "not started"
 
+            ts_before = adapter.health.timestamp
+
             await adapter.start(bus)
             assert adapter.health.online is True
             assert adapter.health.detail == "running"
+            assert adapter.health.timestamp >= ts_before
 
+            ts_running = adapter.health.timestamp
             await adapter.stop()
+            assert adapter.health.timestamp >= ts_running
             assert adapter.health.online is False
             assert adapter.health.detail == "stopped"
 
