@@ -48,7 +48,7 @@ Jedes Modul kennt nur den Bus – nicht die anderen Module.
 Die Kommunikation erfolgt über benannte Topics:
 ```
 ecoflow/powerstream/state      # Gerätedaten eingehend
-ecoflow/powerstream/set        # Steuerbefehle ausgehend  
+ecoflow/powerstream/command    # Steuerbefehle ausgehend  
 mqtt/state                     # MQTT Verbindungsstatus
 system/nagabridge/shutdown     # Graceful Shutdown
 ```
@@ -105,3 +105,23 @@ jede neue Verbindung braucht eine neue Queue.
 - Muster: Publish-Subscribe Pattern (GoF)
 - Muster: Mediator Pattern (GoF)
 - Inspiration: CAN-Bus (Controller Area Network)
+
+---
+
+## Amendment 2026-05-03: Command-Topic-Namen vereinheitlicht
+
+### Problem
+
+Im ADR-001 Beispiel wurde für Steuerbefehle `.../set` verwendet,
+während ADR-002 den Event-Typ `command` im Topic-Schema
+`<domain>/<entity>/<type>` festlegt.
+
+### Entscheidung
+
+Für Steuerbefehle wird einheitlich `command` als Type-Segment
+verwendet. Beispiele in ADR-001 wurden entsprechend angepasst.
+
+### Konsequenz
+
+Die Topic-Form `.../set` gilt nur noch als historisches Beispiel.
+Maßgeblich ist `.../command` gemäß ADR-002.

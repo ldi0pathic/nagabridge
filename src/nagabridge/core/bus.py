@@ -13,6 +13,7 @@
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -22,6 +23,7 @@ log = logging.getLogger("nagabridge.bus")
 Topic = str
 Payload = dict[str, Any]
 Handler = Callable[[Topic, Payload], Coroutine[Any, Any, None]]
+TOPIC_PATTERN = re.compile(r"^[^/]+/[^/]+/[^/]+$")
 
 
 class EventBus:
@@ -51,6 +53,7 @@ class EventBus:
 
     async def subscribe(self, topic: Topic, handler: Handler) -> None:
         """Registriert einen Handler für ein Topic."""
+        self._validate_topic(topic)
         if topic not in self._subscribers:
             self._subscribers[topic] = []
         if handler not in self._subscribers[topic]:
@@ -59,16 +62,10 @@ class EventBus:
 
     async def unsubscribe(self, topic: Topic, handler: Handler) -> None:
         """Entfernt einen Handler von einem Topic."""
+        self._validate_topic(topic)
         if topic in self._subscribers:
-            (
-                self._subscribers[topic].discard(handler)
-                if hasattr(self._subscribers[topic], "discard")
-                else (
-                    self._subscribers[topic].remove(handler)
-                    if handler in self._subscribers[topic]
-                    else None
-                )
-            )
+            if handler in self._subscribers[topic]:
+                self._subscribers[topic].remove(handler)
             log.debug("unsubscribe: %s → %s", topic, handler.__qualname__)
 
     async def publish(self, topic: Topic, payload: Payload) -> None:
@@ -80,6 +77,7 @@ class EventBus:
         Jeder Handler wird als eigener Task gestartet – kein Handler
         kann den Bus blockieren.
         """
+        self._validate_topic(topic)
         handlers = self._subscribers.get(topic, [])
 
         if not handlers:
@@ -106,7 +104,15 @@ class EventBus:
 
     def subscriber_count(self, topic: Topic) -> int:
         """Gibt die Anzahl der Subscriber für ein Topic zurück."""
+        self._validate_topic(topic)
         return len(self._subscribers.get(topic, []))
+
+    def _validate_topic(self, topic: Topic) -> None:
+        """Validiert Topics nach dem Schema <domain>/<entity>/<type>."""
+        if not TOPIC_PATTERN.match(topic):
+            raise ValueError(
+                f"Ungültiges Topic '{topic}'. Erwartet: <domain>/<entity>/<type>."
+            )
 
     @property
     def topics(self) -> list[Topic]:
