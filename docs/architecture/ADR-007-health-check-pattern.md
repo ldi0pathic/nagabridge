@@ -10,7 +10,7 @@ Accepted
 
 NagaBridge besteht aus mehreren unabhängigen Modulen die über
 den Event Bus kommunizieren. Bei automatischen Updates
-(siehe ADR-008) muss das System zuverlässig erkennen ob ein
+(siehe ADR-010) muss das System zuverlässig erkennen ob ein
 Update erfolgreich war oder ein Rollback notwendig ist.
 
 Zusätzlich soll der Betriebszustand des Systems jederzeit
@@ -110,7 +110,7 @@ Ein Monitor prüft aktiv alle Adapter von außen.
 ## Konsequenzen
 
 **Positiv:**
-* automatischer Rollback nach Update möglich (siehe ADR-008)
+* automatischer Rollback nach Update möglich (siehe ADR-010)
 * Systemzustand jederzeit transparent
 * ioBroker kann system/health/# abonnieren
 * Web-UI kann Systemstatus visualisieren
@@ -123,5 +123,5 @@ Ein Monitor prüft aktiv alle Adapter von außen.
 ## Referenzen
 
 * ADR-001: Event Bus als zentrales Kommunikationsmuster
-* ADR-008: Blue-Green Deployment & Auto-Rollback
+* ADR-010: Deployment – Verzeichnisse, Symlinks und konfigurierbarer Update-Trigger
 * Health Check Pattern (Microsoft Azure Architecture Patterns)

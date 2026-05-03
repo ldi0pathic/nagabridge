@@ -50,7 +50,7 @@ Die Kommunikation erfolgt über benannte Topics:
 ecoflow/powerstream/state      # Gerätedaten eingehend
 ecoflow/powerstream/set        # Steuerbefehle ausgehend  
 mqtt/state                     # MQTT Verbindungsstatus
-system/shutdown                # Graceful Shutdown
+system/nagabridge/shutdown     # Graceful Shutdown
 ```
 
 Der Event Bus wird als einfaches Python-Modul implementiert

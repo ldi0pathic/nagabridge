@@ -226,3 +226,49 @@ Over-Engineering für aktuellen Entwicklungsstand.
 * Python Entry Points:
   https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/
 * Semantic Versioning: https://semver.org
+
+---
+
+## Amendment 2026-05-03: Pragmatisches Monorepo statt Community-Plattform
+
+### Problem
+
+ADR-009 wurde mit dem Ziel entworfen dass die Community eigene
+Adapter entwickeln und per PyPI installieren kann. Das führte zu
+unnötiger Komplexität:
+
+* Python Entry Points für Adapter Discovery
+* unabhängige Versionierung pro Adapter
+* PyPI Veröffentlichung als Ziel
+* Kompatibilitätsmatrix zwischen Adaptern
+
+NagaBridge ist ein persönliches Projekt. Diese Komplexität ist
+nicht gerechtfertigt.
+
+### Entscheidung
+
+**Entry Points, PyPI und unabhängige Adapter-Versionierung
+werden nicht umgesetzt.**
+
+Stattdessen gilt:
+
+* alle Adapter leben im Monorepo und werden gemeinsam versioniert
+* ein Release-Tag gilt für das gesamte System (Core + alle Adapter)
+* Adapter werden nicht als separate Python-Packages deployed
+* der Core lädt Adapter direkt per Import – kein Discovery-Mechanismus
+
+Das Plugin-Konzept bleibt erhalten als **Strukturprinzip**:
+
+* Adapter implementieren weiterhin `AdapterInterface`
+* neue Adapter können ohne Änderung bestehender Komponenten
+  hinzugefügt werden
+* jeder Adapter bleibt unabhängig testbar
+
+Wer das Projekt nutzen möchte, kann es clonen oder forken.
+
+### Konsequenz
+
+* ADR-009 Abschnitte zu Entry Points, PyPI und Community-Releases
+  gelten als überholt
+* Deployment folgt ADR-010
+* `AdapterInterface` als formaler Vertrag bleibt gültig
