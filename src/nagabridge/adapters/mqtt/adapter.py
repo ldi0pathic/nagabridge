@@ -3,14 +3,18 @@
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from types import ModuleType
 from typing import Protocol, cast
 
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.health import HealthStatus
 
+mqtt_client: ModuleType | None
 try:
-    import paho.mqtt.client as mqtt_client  # type: ignore[import-untyped,import-not-found]
+    import paho.mqtt.client as _mqtt_client
+
+    mqtt_client = _mqtt_client
 except ModuleNotFoundError:
     mqtt_client = None
 

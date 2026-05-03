@@ -45,3 +45,4 @@ python_version = "3.12"
 strict = true
 mypy_path = "src"
 explicit_package_bases = true
+disable_error_code = ["import-untyped", "import-not-found"]
