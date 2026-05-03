@@ -4,6 +4,9 @@ import asyncio
 import os
 import signal
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from nagabridge.adapters.delta2.adapter import Delta2Adapter
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
@@ -100,8 +103,22 @@ def test_build_adapters_from_config_includes_expected_names(tmp_path: Path) -> N
     _ensure("mqtt" in names, "MQTT adapter should be present")
 
 
-def test_run_starts_and_stops_cleanly(tmp_path: Path) -> None:
+def test_run_starts_and_stops_cleanly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`run` should start, receive signal, and shutdown cleanly."""
+
+    def _fake_import_module(module_name: str) -> object:
+        if module_name == "paho.mqtt.client":
+            return SimpleNamespace(Client=FakeMqttClient)
+        msg = f"Unexpected module import requested: {module_name}"
+        raise ModuleNotFoundError(msg)
+
+    monkeypatch.setattr(
+        "nagabridge.adapters.mqtt.adapter.import_module",
+        _fake_import_module,
+    )
 
     async def scenario() -> None:
         config = _write_config(tmp_path)
