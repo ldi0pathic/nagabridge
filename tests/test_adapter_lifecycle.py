@@ -1,3 +1,5 @@
+"""Lifecycle tests for stub adapters."""
+
 import asyncio
 
 from nagabridge.adapters.delta2.adapter import Delta2Adapter
@@ -8,11 +10,20 @@ from nagabridge.core.config import BleDeviceConfig
 
 
 def _cfg(name: str, type_: str) -> BleDeviceConfig:
+    """Build a deterministic BLE config for tests."""
     return BleDeviceConfig(name=name, mac="AA:BB:CC:DD:EE:FF", type=type_)
 
 
-def test_stub_adapter_lifecycle_health_states():
-    async def scenario():
+def _ensure(condition: object, message: str) -> None:
+    """Raise AssertionError when a condition is not met."""
+    if not condition:
+        raise AssertionError(message)
+
+
+def test_stub_adapter_lifecycle_health_states() -> None:
+    """Verify start/stop lifecycle updates health correctly for all stubs."""
+
+    async def scenario() -> None:
         bus = EventBus()
         adapters = [
             PowerstreamAdapter(_cfg("Powerstream", "powerstream")),
@@ -21,20 +32,41 @@ def test_stub_adapter_lifecycle_health_states():
         ]
 
         for adapter in adapters:
-            assert adapter.health.online is False
-            assert adapter.health.detail == "not started"
+            _ensure(adapter.health.online is False, "Adapter must start offline")
+            _ensure(
+                adapter.health.detail == "not started",
+                "Adapter must start with 'not started' detail",
+            )
 
             ts_before = adapter.health.timestamp
 
             await adapter.start(bus)
-            assert adapter.health.online is True
-            assert adapter.health.detail == "running"
-            assert adapter.health.timestamp >= ts_before
+            _ensure(
+                adapter.health.online is True,
+                "Adapter must be online after start()",
+            )
+            _ensure(
+                adapter.health.detail == "running",
+                "Adapter detail must be 'running' after start()",
+            )
+            _ensure(
+                adapter.health.timestamp >= ts_before,
+                "Adapter timestamp must be monotonic across start()",
+            )
 
             ts_running = adapter.health.timestamp
             await adapter.stop()
-            assert adapter.health.timestamp >= ts_running
-            assert adapter.health.online is False
-            assert adapter.health.detail == "stopped"
+            _ensure(
+                adapter.health.timestamp >= ts_running,
+                "Adapter timestamp must be monotonic across stop()",
+            )
+            _ensure(
+                adapter.health.online is False,
+                "Adapter must be offline after stop()",
+            )
+            _ensure(
+                adapter.health.detail == "stopped",
+                "Adapter detail must be 'stopped' after stop()",
+            )
 
     asyncio.run(scenario())
