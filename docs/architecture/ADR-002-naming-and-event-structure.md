@@ -40,7 +40,7 @@ Beispiele:
 * ecoflow/powerstream/state
 * ecoflow/delta2max/state
 * ecoflow/powerstream/command
-* system/shutdown
+* system/nagabridge/shutdown
 * mqtt/connection/state
 
 ### 2. Event-Typen über Topic definiert
@@ -162,3 +162,39 @@ Nicht wartbar bei wachsendem System
 
 * Publish-Subscribe Pattern
 * CAN Bus Prinzipien (State statt Historie)
+
+---
+
+## Amendment 2026-05-03: Topic-Schema für System-Topics
+
+### Problem
+
+ADR-001 verwendete `system/shutdown` als Beispiel-Topic mit nur zwei
+Ebenen. ADR-002 definiert das Schema als `<domain>/<entity>/<type>` –
+drei Ebenen. Das war inkonsistent.
+
+### Entscheidung
+
+Das Schema `<domain>/<entity>/<type>` gilt **ohne Ausnahmen** –
+auch für System-Topics.
+
+System-Topics werden wie folgt umbenannt:
+
+| Alt | Neu |
+|---|---|
+| `system/shutdown` | `system/nagabridge/shutdown` |
+| `system/health/<name>` | bleibt – war bereits konform |
+| `system/update/status` | bleibt – war bereits konform |
+
+Neue System-Topics folgen immer dem vollständigen Schema:
+
+```
+system/nagabridge/shutdown
+system/nagabridge/restart
+system/nagabridge/status
+```
+
+### Konsequenz
+
+ADR-001 Beispiele gelten als überholt – das Topic-Schema aus ADR-002
+in der jeweils aktuellen Fassung ist maßgeblich.
