@@ -46,7 +46,7 @@ def test_mqtt_adapter_forwards_bus_events_with_fake_client():
             config=MqttAdapterConfig(
                 host="broker.local",
                 port=1883,
-                subscribe_topic="ecoflow/powerstream/state",
+                subscribe_topics=["ecoflow/powerstream/state"],
                 publish_prefix="nagabridge",
             ),
             client_factory=lambda: fake_client,

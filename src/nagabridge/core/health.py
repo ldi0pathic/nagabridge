@@ -5,6 +5,5 @@ from dataclasses import dataclass
 
 @dataclass(slots=True)
 class HealthStatus:
-    adapter: str
-    online: bool
-    detail: str = ""
+    online: bool = False
+    detail: str = "unknown"

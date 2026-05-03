@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
 from nagabridge.core.bus import EventBus
+from nagabridge.core.health import HealthStatus
 
-
-@dataclass(slots=True)
-class AdapterHealth:
-    online: bool = False
-    detail: str = "unknown"
+# Backward compatible alias; avoid duplicate health model classes.
+AdapterHealth = HealthStatus
 
 
 class Adapter(ABC):
@@ -25,7 +22,7 @@ class Adapter(ABC):
 
     @property
     @abstractmethod
-    def health(self) -> AdapterHealth: ...
+    def health(self) -> HealthStatus: ...
 
     @abstractmethod
     async def start(self, bus: EventBus) -> None: ...

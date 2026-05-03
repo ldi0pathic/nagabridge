@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from nagabridge.core.adapter import Adapter, AdapterHealth
@@ -14,7 +14,13 @@ class MqttAdapterConfig:
     port: int = 1883
     user: str | None = None
     password: str | None = None
-    subscribe_topic: str = "ecoflow/powerstream/state"
+    subscribe_topics: list[str] = field(
+        default_factory=lambda: [
+            "ecoflow/powerstream/state",
+            "ecoflow/delta2/state",
+            "ecoflow/delta2max/state",
+        ]
+    )
     publish_prefix: str = "nagabridge"
 
 
@@ -36,7 +42,7 @@ class MqttAdapter(Adapter):
 
     @property
     def version(self) -> str:
-        return "0.2.0"
+        return "0.3.0"
 
     @property
     def health(self) -> AdapterHealth:
@@ -59,16 +65,17 @@ class MqttAdapter(Adapter):
         self._client.connect(self._config.host, self._config.port)
         self._client.loop_start()
 
-        await bus.subscribe(self._config.subscribe_topic, self._on_bus_event)
+        for topic in self._config.subscribe_topics:
+            await bus.subscribe(topic, self._on_bus_event)
+
         self._health = AdapterHealth(
             True, f"connected to {self._config.host}:{self._config.port}"
         )
 
     async def stop(self) -> None:
         if self._bus is not None:
-            await self._bus.unsubscribe(
-                self._config.subscribe_topic, self._on_bus_event
-            )
+            for topic in self._config.subscribe_topics:
+                await self._bus.unsubscribe(topic, self._on_bus_event)
 
         if self._client is not None:
             self._client.loop_stop()
