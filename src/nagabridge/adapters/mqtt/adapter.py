@@ -3,16 +3,12 @@
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from importlib import import_module
 from typing import Protocol, cast
 
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.health import HealthStatus
-
-try:
-    import paho.mqtt.client as mqtt_client
-except ModuleNotFoundError:
-    mqtt_client = None
 
 
 class _SupportsMqttClient(Protocol):
@@ -79,9 +75,11 @@ class MqttAdapter(Adapter):
         """Connect to MQTT and subscribe to configured bus topics."""
         self._bus = bus
         if self._client_factory is None:
-            if mqtt_client is None:
+            try:
+                mqtt_client = import_module("paho.mqtt.client")
+            except ModuleNotFoundError as err:
                 msg = "paho-mqtt is required for MqttAdapter"
-                raise RuntimeError(msg)
+                raise RuntimeError(msg) from err
             self._client = cast("_SupportsMqttClient", mqtt_client.Client())
         else:
             self._client = self._client_factory()

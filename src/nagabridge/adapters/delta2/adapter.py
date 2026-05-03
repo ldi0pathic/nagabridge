@@ -32,8 +32,8 @@ class Delta2Adapter(Adapter):
     async def start(self, bus: EventBus) -> None:
         """Start the adapter lifecycle."""
         _ = bus
-        self._health = HealthStatus(online=True, message="running")
+        self._health = HealthStatus(online=True, detail="running")
 
     async def stop(self) -> None:
         """Stop the adapter lifecycle."""
-        self._health = HealthStatus(online=False, message="stopped")
+        self._health = HealthStatus(online=False, detail="stopped")
