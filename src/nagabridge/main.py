@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import signal
 from pathlib import Path
 
 from nagabridge.adapters.delta2.adapter import Delta2Adapter
@@ -11,6 +13,8 @@ from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig, load_config
 from nagabridge.core.logging import configure_logging
+
+log = logging.getLogger("nagabridge.main")
 
 DEFAULT_CONFIG_PATH = Path("nagabridge.toml")
 
@@ -51,8 +55,31 @@ async def run(config_path: Path = DEFAULT_CONFIG_PATH) -> None:
     bus = EventBus()
     adapters = build_adapters_from_config(config_path)
 
+    shutdown_event = asyncio.Event()
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, shutdown_event.set)
+
+    log.info("NagaBridge startet – %d Adapter geladen", len(adapters))
+
     for adapter in adapters:
         await adapter.start(bus)
+        log.info("Adapter gestartet: %s", adapter.name)
+
+    await bus.publish("system/nagabridge/status", {"status": "running"})
+
+    log.info("NagaBridge läuft. Warte auf SIGINT/SIGTERM...")
+    await shutdown_event.wait()
+
+    log.info("Shutdown eingeleitet...")
+    await bus.publish("system/nagabridge/shutdown", {"reason": "signal"})
+
+    for adapter in reversed(adapters):
+        await adapter.stop()
+        log.info("Adapter gestoppt: %s", adapter.name)
+
+    log.info("NagaBridge beendet.")
 
 
 def main() -> None:
