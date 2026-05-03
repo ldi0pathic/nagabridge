@@ -2,6 +2,12 @@
 
 Ziel: CI-Fehler früh lokal finden, bevor ein Commit/PR erstellt wird.
 
+## Policy: Regeln nicht wegkonfigurieren
+
+- Keine globalen Deaktivierungen von Lint-/Type-Error-Codes (z. B. Ruff/Mypy) ohne explizite Maintainer-Freigabe.
+- Erst Code/Typisierung/Dependencies korrekt fixen.
+- Falls eine Deaktivierung wirklich nötig ist: vorher fragen und die Entscheidung im PR dokumentieren.
+
 ## 1) Python Setup
 
 ```bash

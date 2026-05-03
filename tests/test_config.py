@@ -1,17 +1,29 @@
+"""Tests for TOML configuration loading and validation."""
+
 from pathlib import Path
 
 import pytest
 
 from nagabridge.core.config import ConfigError, load_config
 
+TWO_DEVICES = 2
+
 
 def _write(tmp_path: Path, body: str) -> Path:
+    """Write a TOML config body to a temporary config file."""
     path = tmp_path / "nagabridge.toml"
     path.write_text(body, encoding="utf-8")
     return path
 
 
-def test_load_config_valid_minimal(tmp_path: Path):
+def _ensure(condition: object, message: str) -> None:
+    """Raise assertion error if condition is not true."""
+    if not condition:
+        raise AssertionError(message)
+
+
+def test_load_config_valid_minimal(tmp_path: Path) -> None:
+    """Minimal valid config should load MQTT and one adapter."""
     path = _write(
         tmp_path,
         """
@@ -30,12 +42,13 @@ type = "powerstream"
     )
 
     cfg = load_config(path)
-    assert cfg.mqtt is not None
-    assert cfg.mqtt.host == "127.0.0.1"
-    assert cfg.devices[0].type == "powerstream"
+    _ensure(cfg.mqtt is not None, "MQTT config should be present")
+    _ensure(cfg.mqtt.host == "127.0.0.1", "MQTT host should match config")
+    _ensure(cfg.devices[0].type == "powerstream", "Adapter type should match config")
 
 
-def test_load_config_without_mqtt_section_is_valid(tmp_path: Path):
+def test_load_config_without_mqtt_section_is_valid(tmp_path: Path) -> None:
+    """Config without MQTT block should remain valid."""
     path = _write(
         tmp_path,
         """
@@ -46,10 +59,11 @@ type = "powerstream"
 """,
     )
     cfg = load_config(path)
-    assert cfg.mqtt is None
+    _ensure(cfg.mqtt is None, "MQTT should be optional")
 
 
-def test_load_config_invalid_device_type(tmp_path: Path):
+def test_load_config_invalid_device_type(tmp_path: Path) -> None:
+    """Unknown device types should raise ConfigError."""
     path = _write(
         tmp_path,
         """
@@ -64,7 +78,8 @@ type = "foo"
         load_config(path)
 
 
-def test_load_config_invalid_mac(tmp_path: Path):
+def test_load_config_invalid_mac(tmp_path: Path) -> None:
+    """Invalid MAC format should raise ConfigError."""
     path = _write(
         tmp_path,
         """
@@ -79,7 +94,8 @@ type = "powerstream"
         load_config(path)
 
 
-def test_load_config_missing_device_name(tmp_path: Path):
+def test_load_config_missing_device_name(tmp_path: Path) -> None:
+    """Missing required device fields should raise ConfigError."""
     path = _write(
         tmp_path,
         """
@@ -93,7 +109,8 @@ type = "powerstream"
         load_config(path)
 
 
-def test_load_config_invalid_log_level(tmp_path: Path):
+def test_load_config_invalid_log_level(tmp_path: Path) -> None:
+    """Unsupported log levels should raise ConfigError."""
     path = _write(
         tmp_path,
         """
@@ -106,7 +123,8 @@ log_level = "TRACE"
         load_config(path)
 
 
-def test_load_config_invalid_mqtt_port(tmp_path: Path):
+def test_load_config_invalid_mqtt_port(tmp_path: Path) -> None:
+    """Out-of-range MQTT port should raise ConfigError."""
     path = _write(
         tmp_path,
         """
@@ -120,7 +138,8 @@ port = 99999
         load_config(path)
 
 
-def test_load_config_multiple_devices(tmp_path: Path):
+def test_load_config_multiple_devices(tmp_path: Path) -> None:
+    """Multiple adapters should all be loaded from config."""
     path = _write(
         tmp_path,
         """
@@ -137,10 +156,11 @@ type = "delta2"
     )
 
     cfg = load_config(path)
-    assert len(cfg.devices) == 2
+    _ensure(len(cfg.devices) == TWO_DEVICES, "Expected two device entries")
 
 
-def test_load_config_missing_mqtt_host(tmp_path: Path):
+def test_load_config_missing_mqtt_host(tmp_path: Path) -> None:
+    """MQTT section without host should raise ConfigError."""
     path = _write(
         tmp_path,
         """
