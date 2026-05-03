@@ -1,15 +1,17 @@
 from nagabridge.core.adapter import Adapter
+from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthStatus
 from nagabridge.core.bus import EventBus
 
 
 class PowerstreamAdapter(Adapter):
-    def __init__(self) -> None:
-        self._health = HealthStatus(False, "not started")
+    def __init__(self, config: BleDeviceConfig) -> None:
+        self._config = config
+        self._health = HealthStatus()
 
     @property
     def name(self) -> str:
-        return "powerstream"
+        return self._config.name
 
     @property
     def version(self) -> str:

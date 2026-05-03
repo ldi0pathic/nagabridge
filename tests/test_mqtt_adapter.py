@@ -74,6 +74,35 @@ def test_mqtt_adapter_forwards_bus_events_with_fake_client():
     asyncio.run(scenario())
 
 
+def test_mqtt_adapter_stop_before_start_is_safe():
+    async def scenario():
+        adapter = MqttAdapter(
+            MqttAdapterConfig(host="broker.local"), client_factory=FakeMqttClient
+        )
+        await adapter.stop()
+        assert adapter.health.online is False
+
+    asyncio.run(scenario())
+
+
+def test_mqtt_adapter_with_empty_subscribe_topics_still_starts():
+    async def scenario():
+        bus = EventBus()
+        fake_client = FakeMqttClient()
+        adapter = MqttAdapter(
+            MqttAdapterConfig(host="broker.local", subscribe_topics=[]),
+            client_factory=lambda: fake_client,
+        )
+
+        await adapter.start(bus)
+        assert adapter.health.online is True
+        assert bus.topics == []
+
+        await adapter.stop()
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.skipif(not os.getenv("MQTT_IT_BROKER"), reason="MQTT_IT_BROKER not set")
 def test_mqtt_adapter_integration_with_real_broker():
     import paho.mqtt.client as mqtt
