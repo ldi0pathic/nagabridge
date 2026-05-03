@@ -14,6 +14,7 @@ try:
 except ModuleNotFoundError:
     mqtt_client = None
 
+
 class _SupportsMqttClient(Protocol):
     def username_pw_set(self, user: str, password: str | None = None) -> None: ...
     def connect(self, host: str, port: int) -> None: ...
