@@ -187,3 +187,37 @@ nicht die Gerätelogik.
 
 * CAN Bus (State-basierte Kommunikation)
 * Event-Driven Architecture (vereinfachte Form)
+
+---
+
+## Amendment 2026-05-03: Commands "Latest Wins" – Verantwortung beim Adapter
+
+### Problem
+
+ADR-003 definiert "Latest Wins" für Commands, lässt aber offen
+wer den letzten Command hält und wie das Überschreiben konkret
+funktioniert.
+
+### Entscheidung
+
+Der Bus ist zustandslos. Er speichert keine Commands.
+
+**Verantwortung liegt beim Adapter:**
+
+* der Adapter verarbeitet immer den nächsten eingehenden Command
+* ein noch nicht ausgeführter Command wird stillschweigend verworfen
+  wenn ein neuer eintrifft
+* ein neu gestarteter Adapter wartet auf den nächsten Command –
+  er bekommt keinen alten Command nachgeliefert
+
+### Begründung
+
+Ein alter Command hat keinen Mehrwert für einen neu gestarteten Adapter.
+Commands sind Steuerimpulse für den aktuellen Moment – kein gespeicherter
+Zustand. Das hält den Bus bewusst einfach (siehe ADR-003, Abschnitt 6).
+
+### Konsequenz
+
+Commands dürfen nicht als "ausstehende Aufgaben" modelliert werden.
+Wer garantierte Zustellung braucht, muss einen eigenen Mechanismus
+außerhalb des Buses implementieren.
