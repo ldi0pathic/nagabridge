@@ -1,7 +1,7 @@
 import asyncio
 
-from nagabridge.adapters.mock_mqtt import MockMqttAdapter
-from nagabridge.adapters.mock_source import MockPowerstreamSourceAdapter
+from tests.mocks.mock_mqtt import MockMqttAdapter
+from tests.mocks.mock_source import MockPowerstreamSourceAdapter
 from nagabridge.core.bus import EventBus
 
 
