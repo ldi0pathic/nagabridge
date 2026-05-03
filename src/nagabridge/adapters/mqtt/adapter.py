@@ -4,11 +4,6 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import paho.mqtt.client as mqtt
-
 from nagabridge.core.adapter import Adapter, AdapterHealth
 from nagabridge.core.bus import EventBus, Payload, Topic
 
