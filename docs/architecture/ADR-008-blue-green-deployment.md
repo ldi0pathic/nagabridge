@@ -1,7 +1,7 @@
 # ADR-008: Blue-Green Deployment mit automatischem Rollback
 
 ## Status
-Accepted
+Superseded by ADR-010
 
 ## Datum
 2026-03-29
@@ -235,3 +235,28 @@ Gerätezustand zu prüfen.
 * ADR-003: State-First Bus
 * Blue-Green Deployment Pattern (Martin Fowler)
 * GitHub Releases API
+
+---
+
+## Amendment 2026-05-03: Begründung 60-Sekunden-Wartezeit
+
+### Problem
+
+Die 60-Sekunden-Wartezeit nach einem Update war nicht begründet.
+
+### Entscheidung
+
+60 Sekunden bleibt der Wert. Begründung:
+
+* BLE-Scan + Verbindungsaufbau + erste Daten: bei normalem Betrieb
+  unter 10 Sekunden (validiert im Prototyp)
+* Worst Case: Gerät antwortet nicht sofort, Retry, Timeout: ~30 Sekunden
+* 30 Sekunden zusätzlicher Puffer für Ausreißer
+
+```
+~30s realistisches Maximum + 30s Puffer = 60s
+```
+
+60 Sekunden ist damit konservativ aber vertretbar.
+Sollte sich im Betrieb zeigen dass Verbindungsaufbau regelmäßig
+länger dauert, wird dieser Wert in ADR-010 angepasst.
