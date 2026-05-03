@@ -60,11 +60,15 @@ class MqttAdapter(Adapter):
         self._client.loop_start()
 
         await bus.subscribe(self._config.subscribe_topic, self._on_bus_event)
-        self._health = AdapterHealth(True, f"connected to {self._config.host}:{self._config.port}")
+        self._health = AdapterHealth(
+            True, f"connected to {self._config.host}:{self._config.port}"
+        )
 
     async def stop(self) -> None:
         if self._bus is not None:
-            await self._bus.unsubscribe(self._config.subscribe_topic, self._on_bus_event)
+            await self._bus.unsubscribe(
+                self._config.subscribe_topic, self._on_bus_event
+            )
 
         if self._client is not None:
             self._client.loop_stop()
