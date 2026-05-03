@@ -221,3 +221,33 @@ Zustand. Das hält den Bus bewusst einfach (siehe ADR-003, Abschnitt 6).
 Commands dürfen nicht als "ausstehende Aufgaben" modelliert werden.
 Wer garantierte Zustellung braucht, muss einen eigenen Mechanismus
 außerhalb des Buses implementieren.
+
+---
+
+## Amendment 2026-05-03: Kein State Store bei Neustart
+
+### Problem
+
+ADR-003 ließ offen ob NagaBridge nach einem Neustart den letzten
+bekannten Zustand wiederherstellen soll.
+
+### Entscheidung
+
+Es gibt **keinen persistenten State Store**.
+
+Nach einem Neustart wartet NagaBridge einfach auf neue Daten
+von den Geräten. Der letzte bekannte Zustand vor dem Neustart
+wird nicht wiederhergestellt.
+
+### Begründung
+
+* Geräte senden ihren Zustand kontinuierlich (~1x pro Sekunde)
+* ein gespeicherter Zustand wäre innerhalb von Sekunden ohnehin
+  überschrieben
+* Persistenz würde unnötige Komplexität einführen
+* passt zum State-First Prinzip: nur der aktuelle Zustand zählt
+
+### Konsequenz
+
+Der optionale State Store aus ADR-003 Abschnitt 2 wird
+nicht umgesetzt und gilt als geschlossen.
