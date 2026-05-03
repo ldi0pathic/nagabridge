@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 from typing import Literal
-import tomllib
 
 VALID_DEVICE_TYPES = {"powerstream", "delta2max", "delta2"}
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}

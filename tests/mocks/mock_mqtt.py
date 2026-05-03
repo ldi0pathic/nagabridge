@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from nagabridge.core.adapter import Adapter
-from nagabridge.core.health import HealthStatus
 from nagabridge.core.bus import EventBus, Payload, Topic
+from nagabridge.core.health import HealthStatus
 
 
 class MockMqttAdapter(Adapter):

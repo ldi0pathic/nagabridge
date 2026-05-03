@@ -43,8 +43,8 @@ def build_adapters_from_config(
                     port=cfg.mqtt.port,
                     user=cfg.mqtt.user,
                     password=cfg.mqtt.password,
-                )
-            )
+                ),
+            ),
         )
 
     configure_logging(cfg.log_level)

@@ -93,7 +93,7 @@ def test_run_all_adapters_offline_after_shutdown(tmp_path: Path):
 
     adapters = [
         PowerstreamAdapter(
-            BleDeviceConfig("Powerstream", "AA:BB:CC:DD:EE:FF", "powerstream")
+            BleDeviceConfig("Powerstream", "AA:BB:CC:DD:EE:FF", "powerstream"),
         ),
         Delta2Adapter(BleDeviceConfig("Delta2", "AA:BB:CC:DD:EE:FE", "delta2")),
     ]

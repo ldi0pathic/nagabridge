@@ -1,7 +1,7 @@
 from nagabridge.core.adapter import Adapter
+from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthStatus
-from nagabridge.core.bus import EventBus
 
 
 class Delta2Adapter(Adapter):

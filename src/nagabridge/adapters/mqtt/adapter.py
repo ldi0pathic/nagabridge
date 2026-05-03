@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from nagabridge.core.adapter import Adapter
-from nagabridge.core.health import HealthStatus
 from nagabridge.core.bus import EventBus, Payload, Topic
+from nagabridge.core.health import HealthStatus
 
 
 @dataclass(slots=True)
@@ -16,7 +16,7 @@ class MqttAdapterConfig:
     user: str | None = None
     password: str | None = None
     subscribe_topics: list[str] = field(
-        default_factory=lambda: ["ecoflow/powerstream/state"]
+        default_factory=lambda: ["ecoflow/powerstream/state"],
     )
     publish_prefix: str = "nagabridge"
 
@@ -66,7 +66,7 @@ class MqttAdapter(Adapter):
             await bus.subscribe(topic, self._on_bus_event)
 
         self._health = HealthStatus(
-            True, f"connected to {self._config.host}:{self._config.port}"
+            True, f"connected to {self._config.host}:{self._config.port}",
         )
 
     async def stop(self) -> None:

@@ -1,8 +1,8 @@
 import asyncio
 
+from nagabridge.core.bus import EventBus
 from tests.mocks.mock_mqtt import MockMqttAdapter
 from tests.mocks.mock_source import MockPowerstreamSourceAdapter
-from nagabridge.core.bus import EventBus
 
 
 def test_mock_powerstream_to_mock_mqtt_pipeline():
@@ -21,7 +21,7 @@ def test_mock_powerstream_to_mock_mqtt_pipeline():
             (
                 "ecoflow/powerstream/state",
                 {"power": 120, "battery": 80, "pv_input": 300},
-            )
+            ),
         ]
 
         await mqtt.stop()

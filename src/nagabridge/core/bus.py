@@ -90,7 +90,7 @@ class EventBus:
             asyncio.create_task(self._call_handler(handler, topic, payload))
 
     async def _call_handler(
-        self, handler: Handler, topic: Topic, payload: Payload
+        self, handler: Handler, topic: Topic, payload: Payload,
     ) -> None:
         """Ruft einen Handler auf und fängt Exceptions ab."""
         try:
@@ -111,7 +111,7 @@ class EventBus:
         """Validiert Topics nach dem Schema <domain>/<entity>/<type>."""
         if not TOPIC_PATTERN.match(topic):
             raise ValueError(
-                f"Ungültiges Topic '{topic}'. Erwartet: <domain>/<entity>/<type>."
+                f"Ungültiges Topic '{topic}'. Erwartet: <domain>/<entity>/<type>.",
             )
 
     @property

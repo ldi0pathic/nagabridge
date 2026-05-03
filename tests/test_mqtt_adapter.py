@@ -65,7 +65,7 @@ def test_mqtt_adapter_forwards_bus_events_with_fake_client():
                 json.dumps({"power": 100, "battery": 90, "pv_input": 250}),
                 0,
                 False,
-            )
+            ),
         ]
 
         await adapter.stop()
@@ -77,7 +77,7 @@ def test_mqtt_adapter_forwards_bus_events_with_fake_client():
 def test_mqtt_adapter_stop_before_start_is_safe():
     async def scenario():
         adapter = MqttAdapter(
-            MqttAdapterConfig(host="broker.local"), client_factory=FakeMqttClient
+            MqttAdapterConfig(host="broker.local"), client_factory=FakeMqttClient,
         )
         await adapter.stop()
         assert adapter.health.online is False
