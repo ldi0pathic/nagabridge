@@ -57,6 +57,21 @@ async def test_unsubscribe_nonexistent_handler_is_safe(bus):
     await bus.unsubscribe("ecoflow/powerstream/state", handler)
 
 
+@pytest.mark.asyncio
+async def test_invalid_topic_raises_value_error_on_subscribe(bus):
+    async def handler(topic, payload):
+        pass
+
+    with pytest.raises(ValueError):
+        await bus.subscribe("system/shutdown", handler)
+
+
+@pytest.mark.asyncio
+async def test_invalid_topic_raises_value_error_on_publish(bus):
+    with pytest.raises(ValueError):
+        await bus.publish("system/shutdown", {"reason": "manual"})
+
+
 # --- Publish -----------------------------------------------------------------
 
 
