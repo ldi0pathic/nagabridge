@@ -1,12 +1,12 @@
 """MQTT adapter that forwards bus events to a broker."""
 
-from __future__ import annotations
-
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import Protocol, cast
 
 from nagabridge.core.adapter import Adapter
+from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.health import HealthStatus
 
 try:
@@ -14,18 +14,20 @@ try:
 except ModuleNotFoundError:
     mqtt_client = None
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-    from nagabridge.core.bus import EventBus, Payload, Topic
-
-
 class _SupportsMqttClient(Protocol):
     def username_pw_set(self, user: str, password: str | None = None) -> None: ...
     def connect(self, host: str, port: int) -> None: ...
     def loop_start(self) -> None: ...
     def loop_stop(self) -> None: ...
     def disconnect(self) -> None: ...
-    def publish(self, topic: str, payload: str, qos: int, retain: bool) -> None: ...
+    def publish(
+        self,
+        topic: str,
+        payload: str,
+        qos: int,
+        *,
+        retain: bool,
+    ) -> None: ...
 
 
 @dataclass(slots=True)
