@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Literal
 import tomllib
 
 VALID_DEVICE_TYPES = {"powerstream", "delta2max", "delta2"}
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
+MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
 
 class ConfigError(ValueError):
@@ -53,6 +55,8 @@ def load_config(path: str | Path) -> NagaBridgeConfig:
                 raise ConfigError(f"adapters.ble_device[{idx}] fehlt Feld '{required}'")
         if d["type"] not in VALID_DEVICE_TYPES:
             raise ConfigError(f"Ungültiger Gerätetyp '{d['type']}'")
+        if not MAC_RE.match(d["mac"]):
+            raise ConfigError(f"Ungültige MAC-Adresse '{d['mac']}'")
         devices.append(BleDeviceConfig(name=d["name"], mac=d["mac"], type=d["type"]))
 
     mqtt = None

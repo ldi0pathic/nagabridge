@@ -35,6 +35,20 @@ type = "powerstream"
     assert cfg.devices[0].type == "powerstream"
 
 
+def test_load_config_without_mqtt_section_is_valid(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+""",
+    )
+    cfg = load_config(path)
+    assert cfg.mqtt is None
+
+
 def test_load_config_invalid_device_type(tmp_path: Path):
     path = _write(
         tmp_path,
@@ -48,6 +62,82 @@ type = "foo"
 
     with pytest.raises(ConfigError):
         load_config(path)
+
+
+def test_load_config_invalid_mac(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "foo"
+type = "powerstream"
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_load_config_missing_device_name(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+mac = "AA:BB:CC:DD:EE:11"
+type = "powerstream"
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_load_config_invalid_log_level(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        """
+[system]
+log_level = "TRACE"
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_load_config_invalid_mqtt_port(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        """
+[mqtt]
+host = "127.0.0.1"
+port = 99999
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_load_config_multiple_devices(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+
+[[adapters.ble_device]]
+name = "Delta2"
+mac = "AA:BB:CC:DD:EE:FE"
+type = "delta2"
+""",
+    )
+
+    cfg = load_config(path)
+    assert len(cfg.devices) == 2
 
 
 def test_load_config_missing_mqtt_host(tmp_path: Path):

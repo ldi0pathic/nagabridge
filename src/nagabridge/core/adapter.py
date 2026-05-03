@@ -5,9 +5,6 @@ from abc import ABC, abstractmethod
 from nagabridge.core.bus import EventBus
 from nagabridge.core.health import HealthStatus
 
-# Backward compatible alias; avoid duplicate health model classes.
-AdapterHealth = HealthStatus
-
 
 class Adapter(ABC):
     """Formaler Vertrag für alle NagaBridge-Adapter."""

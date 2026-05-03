@@ -4,7 +4,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from nagabridge.core.adapter import Adapter, AdapterHealth
+from nagabridge.core.adapter import Adapter
+from nagabridge.core.health import HealthStatus
 from nagabridge.core.bus import EventBus, Payload, Topic
 
 
@@ -15,11 +16,7 @@ class MqttAdapterConfig:
     user: str | None = None
     password: str | None = None
     subscribe_topics: list[str] = field(
-        default_factory=lambda: [
-            "ecoflow/powerstream/state",
-            "ecoflow/delta2/state",
-            "ecoflow/delta2max/state",
-        ]
+        default_factory=lambda: ["ecoflow/powerstream/state"]
     )
     publish_prefix: str = "nagabridge"
 
@@ -32,7 +29,7 @@ class MqttAdapter(Adapter):
     ) -> None:
         self._config = config
         self._client_factory = client_factory
-        self._health = AdapterHealth(False, "not started")
+        self._health = HealthStatus(False, "not started")
         self._bus: EventBus | None = None
         self._client: Any | None = None
 
@@ -45,7 +42,7 @@ class MqttAdapter(Adapter):
         return "0.3.0"
 
     @property
-    def health(self) -> AdapterHealth:
+    def health(self) -> HealthStatus:
         return self._health
 
     async def start(self, bus: EventBus) -> None:
@@ -68,7 +65,7 @@ class MqttAdapter(Adapter):
         for topic in self._config.subscribe_topics:
             await bus.subscribe(topic, self._on_bus_event)
 
-        self._health = AdapterHealth(
+        self._health = HealthStatus(
             True, f"connected to {self._config.host}:{self._config.port}"
         )
 
@@ -81,7 +78,7 @@ class MqttAdapter(Adapter):
             self._client.loop_stop()
             self._client.disconnect()
 
-        self._health = AdapterHealth(False, "stopped")
+        self._health = HealthStatus(False, "stopped")
         self._client = None
         self._bus = None
 
