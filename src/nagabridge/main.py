@@ -12,7 +12,6 @@ from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig, load_config
 from nagabridge.core.logging import configure_logging
 
-
 DEFAULT_CONFIG_PATH = Path("nagabridge.toml")
 
 
