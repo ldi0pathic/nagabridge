@@ -90,7 +90,10 @@ class EventBus:
             asyncio.create_task(self._call_handler(handler, topic, payload))
 
     async def _call_handler(
-        self, handler: Handler, topic: Topic, payload: Payload,
+        self,
+        handler: Handler,
+        topic: Topic,
+        payload: Payload,
     ) -> None:
         """Ruft einen Handler auf und fängt Exceptions ab."""
         try:

@@ -66,7 +66,8 @@ class MqttAdapter(Adapter):
             await bus.subscribe(topic, self._on_bus_event)
 
         self._health = HealthStatus(
-            True, f"connected to {self._config.host}:{self._config.port}",
+            True,
+            f"connected to {self._config.host}:{self._config.port}",
         )
 
     async def stop(self) -> None:
