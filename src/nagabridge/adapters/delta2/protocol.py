@@ -1,6 +1,9 @@
+"""Protocol structures for Delta 2 communication."""
+
+
 class Type7Crypto:
-    """Placeholder für Delta2 Type7 Crypto."""
+    """Represent Delta 2 type-7 crypto metadata."""
 
 
 class Packet:
-    """Placeholder für Delta2 Packet-Layout."""
+    """Represent a decoded Delta 2 packet layout."""

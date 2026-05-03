@@ -1,6 +1,9 @@
+"""Protocol structures for PowerStream communication."""
+
+
 class Type1Crypto:
-    """Placeholder für Powerstream Type1 Crypto."""
+    """Represent PowerStream type-1 crypto metadata."""
 
 
 class Packet:
-    """Placeholder für Powerstream Packet-Layout."""
+    """Represent a decoded PowerStream packet layout."""

@@ -1,22 +1,27 @@
+"""TOML configuration loading and validation."""
+
 from __future__ import annotations
 
+import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 from typing import Literal
-import tomllib
 
 VALID_DEVICE_TYPES = {"powerstream", "delta2max", "delta2"}
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+MAX_TCP_PORT = 65535
 
 
 class ConfigError(ValueError):
-    pass
+    """Raised when configuration content is invalid."""
 
 
 @dataclass(slots=True)
 class BleDeviceConfig:
+    """Configuration for a BLE-backed adapter device."""
+
     name: str
     mac: str
     type: Literal["powerstream", "delta2max", "delta2"]
@@ -24,6 +29,8 @@ class BleDeviceConfig:
 
 @dataclass(slots=True)
 class MqttConfig:
+    """Configuration for MQTT broker integration."""
+
     host: str
     port: int = 1883
     user: str | None = None
@@ -32,12 +39,15 @@ class MqttConfig:
 
 @dataclass(slots=True)
 class NagaBridgeConfig:
+    """Complete application configuration model."""
+
     log_level: str = "INFO"
     devices: list[BleDeviceConfig] = field(default_factory=list)
     mqtt: MqttConfig | None = None
 
 
 def load_config(path: str | Path) -> NagaBridgeConfig:
+    """Load and validate bridge configuration from TOML file."""
     data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
 
     system = data.get("system", {})
@@ -46,26 +56,32 @@ def load_config(path: str | Path) -> NagaBridgeConfig:
 
     log_level = system.get("log_level", "INFO")
     if log_level not in VALID_LOG_LEVELS:
-        raise ConfigError(f"Ungültiger log_level '{log_level}'")
+        msg = f"Ungültiger log_level '{log_level}'"
+        raise ConfigError(msg)
 
     devices = []
     for idx, d in enumerate(adapters.get("ble_device", []), start=1):
         for required in ("name", "mac", "type"):
             if required not in d:
-                raise ConfigError(f"adapters.ble_device[{idx}] fehlt Feld '{required}'")
+                msg = f"adapters.ble_device[{idx}] fehlt Feld '{required}'"
+                raise ConfigError(msg)
         if d["type"] not in VALID_DEVICE_TYPES:
-            raise ConfigError(f"Ungültiger Gerätetyp '{d['type']}'")
+            msg = f"Ungültiger Gerätetyp '{d['type']}'"
+            raise ConfigError(msg)
         if not MAC_RE.match(d["mac"]):
-            raise ConfigError(f"Ungültige MAC-Adresse '{d['mac']}'")
+            msg = f"Ungültige MAC-Adresse '{d['mac']}'"
+            raise ConfigError(msg)
         devices.append(BleDeviceConfig(name=d["name"], mac=d["mac"], type=d["type"]))
 
     mqtt = None
     if mqtt_data is not None:
         if "host" not in mqtt_data or not str(mqtt_data["host"]).strip():
-            raise ConfigError("mqtt.host fehlt oder ist leer")
+            msg = "mqtt.host fehlt oder ist leer"
+            raise ConfigError(msg)
         port = int(mqtt_data.get("port", 1883))
-        if port <= 0 or port > 65535:
-            raise ConfigError(f"Ungültiger mqtt.port '{port}'")
+        if port <= 0 or port > MAX_TCP_PORT:
+            msg = f"Ungültiger mqtt.port '{port}'"
+            raise ConfigError(msg)
         mqtt = MqttConfig(
             host=mqtt_data["host"],
             port=port,

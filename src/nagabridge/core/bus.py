@@ -1,8 +1,10 @@
+"""Asynchronous in-memory event bus used by adapters."""
+
 # =============================================================================
 # core/bus.py - Event Bus
 #
 # Zentraler Kommunikationskanal zwischen allen Adaptern.
-# Kein Adapter kennt einen anderen – alle kommunizieren nur über den Bus.
+# Kein Adapter kennt einen anderen - alle kommunizieren nur über den Bus.
 #
 # Prinzipien (siehe ADR-001, ADR-002, ADR-003):
 #   - Fire-and-forget, kein Buffering, keine Backpressure
@@ -31,7 +33,7 @@ class EventBus:
     Asyncio-basierter Event Bus.
 
     Jeder Adapter subscribt auf Topics und publisht Payloads.
-    Der Bus verteilt eingehende Events direkt an alle Subscriber –
+    Der Bus verteilt eingehende Events direkt an alle Subscriber -
     ohne Queue, ohne Blockierung.
 
     Verwendung:
@@ -47,9 +49,11 @@ class EventBus:
         await bus.unsubscribe("ecoflow/powerstream/state", my_handler)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize empty subscriber and task registries."""
         # topic → Liste von Handlern
         self._subscribers: dict[Topic, list[Handler]] = {}
+        self._tasks: set[asyncio.Task[None]] = set()
 
     async def subscribe(self, topic: Topic, handler: Handler) -> None:
         """Registriert einen Handler für ein Topic."""
@@ -74,7 +78,7 @@ class EventBus:
 
         Fire-and-forget: langsame Subscriber können Events verlieren.
         Das ist für State-Daten akzeptiert (ADR-003).
-        Jeder Handler wird als eigener Task gestartet – kein Handler
+        Jeder Handler wird als eigener Task gestartet - kein Handler
         kann den Bus blockieren.
         """
         self._validate_topic(topic)
@@ -87,10 +91,15 @@ class EventBus:
         log.debug("publish: %s → %d subscriber(s)", topic, len(handlers))
 
         for handler in handlers:
-            asyncio.create_task(self._call_handler(handler, topic, payload))
+            task = asyncio.create_task(self._call_handler(handler, topic, payload))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
     async def _call_handler(
-        self, handler: Handler, topic: Topic, payload: Payload
+        self,
+        handler: Handler,
+        topic: Topic,
+        payload: Payload,
     ) -> None:
         """Ruft einen Handler auf und fängt Exceptions ab."""
         try:
@@ -110,9 +119,8 @@ class EventBus:
     def _validate_topic(self, topic: Topic) -> None:
         """Validiert Topics nach dem Schema <domain>/<entity>/<type>."""
         if not TOPIC_PATTERN.match(topic):
-            raise ValueError(
-                f"Ungültiges Topic '{topic}'. Erwartet: <domain>/<entity>/<type>."
-            )
+            msg = f"Ungültiges Topic '{topic}'. Erwartet: <domain>/<entity>/<type>."
+            raise ValueError(msg)
 
     @property
     def topics(self) -> list[Topic]:
