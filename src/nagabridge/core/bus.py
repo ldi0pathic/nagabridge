@@ -60,10 +60,15 @@ class EventBus:
     async def unsubscribe(self, topic: Topic, handler: Handler) -> None:
         """Entfernt einen Handler von einem Topic."""
         if topic in self._subscribers:
-            self._subscribers[topic].discard(handler) \
-                if hasattr(self._subscribers[topic], "discard") \
-                else self._subscribers[topic].remove(handler) \
-                if handler in self._subscribers[topic] else None
+            (
+                self._subscribers[topic].discard(handler)
+                if hasattr(self._subscribers[topic], "discard")
+                else (
+                    self._subscribers[topic].remove(handler)
+                    if handler in self._subscribers[topic]
+                    else None
+                )
+            )
             log.debug("unsubscribe: %s → %s", topic, handler.__qualname__)
 
     async def publish(self, topic: Topic, payload: Payload) -> None:
@@ -84,9 +89,7 @@ class EventBus:
         log.debug("publish: %s → %d subscriber(s)", topic, len(handlers))
 
         for handler in handlers:
-            asyncio.create_task(
-                self._call_handler(handler, topic, payload)
-            )
+            asyncio.create_task(self._call_handler(handler, topic, payload))
 
     async def _call_handler(
         self, handler: Handler, topic: Topic, payload: Payload

@@ -6,8 +6,8 @@ import asyncio
 import pytest
 from nagabridge.core.bus import EventBus
 
-
 # --- Fixtures ----------------------------------------------------------------
+
 
 @pytest.fixture
 def bus():
@@ -15,6 +15,7 @@ def bus():
 
 
 # --- Subscribe / Unsubscribe -------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_subscribe_registers_handler(bus):
@@ -57,6 +58,7 @@ async def test_unsubscribe_nonexistent_handler_is_safe(bus):
 
 
 # --- Publish -----------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_publish_calls_subscriber(bus):
@@ -137,6 +139,7 @@ async def test_publish_multiple_events_all_delivered(bus):
 
 # --- Handler-Fehler ----------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_handler_exception_does_not_crash_bus(bus):
     """Ein fehlerhafter Handler darf den Bus nicht zum Absturz bringen."""
@@ -159,6 +162,7 @@ async def test_handler_exception_does_not_crash_bus(bus):
 
 
 # --- Topics ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_topics_returns_subscribed_topics(bus):
