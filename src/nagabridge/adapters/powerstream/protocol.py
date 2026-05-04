@@ -128,7 +128,9 @@ class Packet:
         else:
             dsrc, ddst, cmd_set, cmd_id = data[14:18]
         payload = (
-            data[payload_start : payload_start + payload_length] if payload_length else b""
+            data[payload_start : payload_start + payload_length]
+            if payload_length
+            else b""
         )
 
         # XOR payload mit erstem Seq-Byte wenn gesetzt (PowerStream benötigt das)
@@ -159,7 +161,9 @@ def encode_simple(payload: bytes) -> bytes:
     """Baut ein unverschlüsseltes 5A5A-EncPacket (für Auth-Kommandos)"""
     frame_type = 0x11
     payload_type = 0x01
-    inner = bytes([frame_type, payload_type]) + struct.pack("<H", len(payload)) + payload
+    inner = (
+        bytes([frame_type, payload_type]) + struct.pack("<H", len(payload)) + payload
+    )
     return PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
 
@@ -195,7 +199,9 @@ class Type7Crypto:
         self._iv: bytes | None = None
 
     def compute_shared_key(self, dev_pubkey_bytes: bytes):
-        dev_pub = ecdsa.VerifyingKey.from_string(dev_pubkey_bytes, curve=ecdsa.SECP160r1)
+        dev_pub = ecdsa.VerifyingKey.from_string(
+            dev_pubkey_bytes, curve=ecdsa.SECP160r1
+        )
         shared = ecdsa.ECDH(
             ecdsa.SECP160r1,
             self._private_key,
@@ -318,7 +324,9 @@ class Type1Crypto:
         encrypted = self.encrypt(inner)
         return header + encrypted
 
-    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[Packet], bytearray]:
+    def decode_packets(
+        self, data: bytes, buffer: bytearray
+    ) -> tuple[list[Packet], bytearray]:
         data = bytes(buffer) + data
         buffer = bytearray()
         packets = []
