@@ -14,6 +14,7 @@ from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.main import (
     DEFAULT_CONFIG_PATH,
+    EXIT_CONFIG_ACTION_REQUIRED,
     build_adapters_from_config,
     main,
     parse_args,
@@ -112,7 +113,10 @@ def test_main_creates_default_config_when_missing(
     config = tmp_path / "missing.toml"
     exit_code = main(["--config", str(config), "--check-config"])
 
-    _ensure(exit_code == 2, "Missing config should request operator action")
+    _ensure(
+        exit_code == EXIT_CONFIG_ACTION_REQUIRED,
+        "Missing config should request operator action",
+    )
     _ensure(config.exists(), "Default config should be created")
 
     content = config.read_text(encoding="utf-8")
