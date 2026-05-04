@@ -42,7 +42,6 @@ log_level = "INFO"
 """
 
 
-
 def ensure_default_config(path: Path) -> bool:
     """Create a default config file when none exists."""
     if path.exists():
@@ -51,6 +50,7 @@ def ensure_default_config(path: Path) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(DEFAULT_CONFIG_TEMPLATE, encoding="utf-8")
     return True
+
 
 def _build_ble_adapter(device: BleDeviceConfig) -> Adapter:
     """Create a BLE adapter instance for a configured device."""
@@ -96,7 +96,9 @@ async def run(
 ) -> None:
     """Run adapter lifecycle until shutdown signal is received."""
     bus = EventBus()
-    adapters = build_adapters_from_config(config_path, log_level_override=log_level_override)
+    adapters = build_adapters_from_config(
+        config_path, log_level_override=log_level_override
+    )
 
     shutdown_event = asyncio.Event()
 
