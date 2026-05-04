@@ -97,7 +97,7 @@ async def run(
     """Run adapter lifecycle until shutdown signal is received."""
     bus = EventBus()
     adapters = build_adapters_from_config(
-        config_path, log_level_override=log_level_override
+        config_path, log_level_override=log_level_override,
     )
 
     shutdown_event = asyncio.Event()

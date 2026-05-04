@@ -124,7 +124,7 @@ def test_main_creates_default_config_when_missing(
 
 
 def test_main_check_config_returns_zero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
     """`main --check-config` should validate config and return success."""
     config = _write_config(tmp_path)
