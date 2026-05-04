@@ -202,7 +202,8 @@ class Type7Crypto:
 
     def compute_shared_key(self, dev_pubkey_bytes: bytes):
         dev_pub = ecdsa.VerifyingKey.from_string(
-            dev_pubkey_bytes, curve=ecdsa.SECP160r1,
+            dev_pubkey_bytes,
+            curve=ecdsa.SECP160r1,
         )
         shared = ecdsa.ECDH(
             ecdsa.SECP160r1,
@@ -327,7 +328,9 @@ class Type1Crypto:
         return header + encrypted
 
     def decode_packets(
-        self, data: bytes, buffer: bytearray,
+        self,
+        data: bytes,
+        buffer: bytearray,
     ) -> tuple[list[Packet], bytearray]:
         data = bytes(buffer) + data
         buffer = bytearray()
