@@ -104,7 +104,6 @@ def test_parse_args_defaults_to_adr_config_path() -> None:
     _ensure(args.config == DEFAULT_CONFIG_PATH, "Default config path should match ADR")
 
 
-
 def test_main_creates_default_config_when_missing(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -123,7 +122,10 @@ def test_main_creates_default_config_when_missing(
     captured = capsys.readouterr()
     _ensure("Config neu angelegt" in captured.err, "stderr should explain creation")
 
-def test_main_check_config_returns_zero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+
+def test_main_check_config_returns_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """`main --check-config` should validate config and return success."""
     config = _write_config(tmp_path)
     exit_code = main(["--config", str(config), "--check-config"])
