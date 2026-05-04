@@ -1,3 +1,5 @@
+"""EcoFlow BLE protocol helpers for PowerStream adapters."""
+
 # =============================================================================
 # protocol.py - EcoFlow BLE Protokoll (portiert von ha-ef-ble)
 # Quelle: https://github.com/rabits/ha-ef-ble (Apache-2.0)
@@ -8,10 +10,10 @@ import logging
 import struct
 
 import ecdsa
+from crc import Calculator, Configuration, Crc8
 from Crypto.Cipher import AES
 from Crypto.PublicKey import ECC
 from Crypto.Util.Padding import pad, unpad
-from crc import Calculator, Configuration, Crc8
 
 log = logging.getLogger(__name__)
 
@@ -200,7 +202,7 @@ class Type7Crypto:
 
     def compute_shared_key(self, dev_pubkey_bytes: bytes):
         dev_pub = ecdsa.VerifyingKey.from_string(
-            dev_pubkey_bytes, curve=ecdsa.SECP160r1
+            dev_pubkey_bytes, curve=ecdsa.SECP160r1,
         )
         shared = ecdsa.ECDH(
             ecdsa.SECP160r1,
@@ -294,7 +296,7 @@ class Type7Crypto:
 _EF_PUBKEY_TYPE1 = ECC.import_key(
     "-----BEGIN PUBLIC KEY-----\n"
     "MCowBQYDK2VuAyEAjyDKgWi1v2IO417ZsQC3VIa5U6bs8TzQQGxzlvCKWkM=\n"
-    "-----END PUBLIC KEY-----"
+    "-----END PUBLIC KEY-----",
 )
 
 
@@ -325,7 +327,7 @@ class Type1Crypto:
         return header + encrypted
 
     def decode_packets(
-        self, data: bytes, buffer: bytearray
+        self, data: bytes, buffer: bytearray,
     ) -> tuple[list[Packet], bytearray]:
         data = bytes(buffer) + data
         buffer = bytearray()
