@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import signal
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,7 +15,7 @@ from nagabridge.adapters.delta2max.adapter import Delta2MaxAdapter
 from nagabridge.adapters.mqtt.adapter import MqttAdapter, MqttAdapterConfig
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
 from nagabridge.core.bus import EventBus
-from nagabridge.core.config import BleDeviceConfig, load_config
+from nagabridge.core.config import BleDeviceConfig, ConfigError, load_config
 from nagabridge.core.logging import configure_logging
 
 if TYPE_CHECKING:
@@ -21,8 +23,34 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("nagabridge.main")
 
-DEFAULT_CONFIG_PATH = Path("nagabridge.toml")
+DEFAULT_CONFIG_PATH = Path("/opt/nagabridge/nagabridge.toml")
 
+DEFAULT_CONFIG_TEMPLATE = """[system]
+log_level = "INFO"
+
+# Optional MQTT bridge
+# [mqtt]
+# host = "192.168.1.10"
+# port = 1883
+
+[adapters]
+# Add one block per BLE device
+# [[adapters.ble_device]]
+# name = "Powerstream"
+# mac = "AA:BB:CC:DD:EE:FF"
+# type = "powerstream"
+"""
+
+
+
+def ensure_default_config(path: Path) -> bool:
+    """Create a default config file when none exists."""
+    if path.exists():
+        return False
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(DEFAULT_CONFIG_TEMPLATE, encoding="utf-8")
+    return True
 
 def _build_ble_adapter(device: BleDeviceConfig) -> Adapter:
     """Create a BLE adapter instance for a configured device."""
@@ -38,6 +66,8 @@ def _build_ble_adapter(device: BleDeviceConfig) -> Adapter:
 
 def build_adapters_from_config(
     config_path: Path = DEFAULT_CONFIG_PATH,
+    *,
+    log_level_override: str | None = None,
 ) -> list[Adapter]:
     """Build all adapters from the TOML configuration file."""
     cfg = load_config(config_path)
@@ -55,14 +85,18 @@ def build_adapters_from_config(
             ),
         )
 
-    configure_logging(cfg.log_level)
+    configure_logging(log_level_override or cfg.log_level)
     return adapters
 
 
-async def run(config_path: Path = DEFAULT_CONFIG_PATH) -> None:
+async def run(
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    *,
+    log_level_override: str | None = None,
+) -> None:
     """Run adapter lifecycle until shutdown signal is received."""
     bus = EventBus()
-    adapters = build_adapters_from_config(config_path)
+    adapters = build_adapters_from_config(config_path, log_level_override=log_level_override)
 
     shutdown_event = asyncio.Event()
 
@@ -91,10 +125,53 @@ async def run(config_path: Path = DEFAULT_CONFIG_PATH) -> None:
     log.info("NagaBridge beendet.")
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
+    parser = argparse.ArgumentParser(prog="nagabridge")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help="Pfad zur Konfigurationsdatei (Default: /opt/nagabridge/nagabridge.toml)",
+    )
+    parser.add_argument(
+        "--check-config",
+        action="store_true",
+        help="Konfiguration prüfen und ohne Start beenden",
+    )
+    parser.add_argument(
+        "--log-level",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+        help="Log-Level zur Laufzeit überschreiben",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
-    asyncio.run(run())
+    args = parse_args(argv)
+    try:
+        if ensure_default_config(args.config):
+            print(
+                f"Config neu angelegt: {args.config}. Bitte Werte prüfen und erneut starten.",
+                file=sys.stderr,
+            )
+            return 2
+
+        load_config(args.config)
+        if args.check_config:
+            print(f"Config OK: {args.config}")
+            return 0
+
+        asyncio.run(run(args.config, log_level_override=args.log_level))
+        return 0
+    except (ConfigError, FileNotFoundError) as err:
+        print(f"Config error: {err}", file=sys.stderr)
+        return 2
+    except Exception as err:  # pragma: no cover
+        print(f"Runtime error: {err}", file=sys.stderr)
+        return 3
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
