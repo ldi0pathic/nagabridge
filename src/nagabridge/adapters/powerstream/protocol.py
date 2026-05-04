@@ -9,11 +9,7 @@ import struct
 
 import ecdsa
 from Crypto.Cipher import AES
-from Crypto.Hash import SHA256
-from Crypto.Protocol.DH import key_agreement
-from Crypto.Protocol.KDF import HKDF
 from Crypto.PublicKey import ECC
-from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
 from crc import Calculator, Configuration, Crc8
 
