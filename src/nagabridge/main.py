@@ -25,6 +25,9 @@ log = logging.getLogger("nagabridge.main")
 
 DEFAULT_CONFIG_PATH = Path("/opt/nagabridge/nagabridge.toml")
 
+EXIT_SUCCESS = 0
+EXIT_CONFIG_ACTION_REQUIRED = 2
+
 DEFAULT_CONFIG_TEMPLATE = """[system]
 log_level = "INFO"
 
@@ -153,27 +156,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
     args = parse_args(argv)
+
+    if ensure_default_config(args.config):
+        sys.stderr.write(
+            "Config neu angelegt: "
+            f"{args.config}. Bitte Werte prüfen und erneut starten.\n",
+        )
+        return EXIT_CONFIG_ACTION_REQUIRED
+
     try:
-        if ensure_default_config(args.config):
-            print(
-                f"Config neu angelegt: {args.config}. Bitte Werte prüfen und erneut starten.",
-                file=sys.stderr,
-            )
-            return 2
-
         load_config(args.config)
-        if args.check_config:
-            print(f"Config OK: {args.config}")
-            return 0
-
-        asyncio.run(run(args.config, log_level_override=args.log_level))
-        return 0
     except (ConfigError, FileNotFoundError) as err:
-        print(f"Config error: {err}", file=sys.stderr)
-        return 2
-    except Exception as err:  # pragma: no cover
-        print(f"Runtime error: {err}", file=sys.stderr)
-        return 3
+        sys.stderr.write(f"Config error: {err}\n")
+        return EXIT_CONFIG_ACTION_REQUIRED
+
+    if args.check_config:
+        sys.stdout.write(f"Config OK: {args.config}\n")
+        return EXIT_SUCCESS
+
+    asyncio.run(run(args.config, log_level_override=args.log_level))
+    return EXIT_SUCCESS
 
 
 if __name__ == "__main__":
