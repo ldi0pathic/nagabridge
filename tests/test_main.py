@@ -12,7 +12,14 @@ from nagabridge.adapters.delta2.adapter import Delta2Adapter
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
-from nagabridge.main import build_adapters_from_config, run
+from nagabridge.main import (
+    DEFAULT_CONFIG_PATH,
+    EXIT_CONFIG_ACTION_REQUIRED,
+    build_adapters_from_config,
+    main,
+    parse_args,
+    run,
+)
 
 
 class FakeMqttClient:
@@ -90,6 +97,46 @@ def _ensure(condition: object, message: str) -> None:
     """Raise when a test invariant is violated."""
     if not condition:
         raise AssertionError(message)
+
+
+def test_parse_args_defaults_to_adr_config_path() -> None:
+    """CLI default config path should match ADR-011 location."""
+    args = parse_args([])
+    _ensure(args.config == DEFAULT_CONFIG_PATH, "Default config path should match ADR")
+
+
+def test_main_creates_default_config_when_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Missing config should be bootstrapped with a default template."""
+    config = tmp_path / "missing.toml"
+    exit_code = main(["--config", str(config), "--check-config"])
+
+    _ensure(
+        exit_code == EXIT_CONFIG_ACTION_REQUIRED,
+        "Missing config should request operator action",
+    )
+    _ensure(config.exists(), "Default config should be created")
+
+    content = config.read_text(encoding="utf-8")
+    _ensure("[system]" in content, "Default config should contain system section")
+    _ensure("[adapters]" in content, "Default config should contain adapters section")
+
+    captured = capsys.readouterr()
+    _ensure("Config neu angelegt" in captured.err, "stderr should explain creation")
+
+
+def test_main_check_config_returns_zero(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`main --check-config` should validate config and return success."""
+    config = _write_config(tmp_path)
+    exit_code = main(["--config", str(config), "--check-config"])
+    _ensure(exit_code == 0, "check-config should exit 0 for valid config")
+    captured = capsys.readouterr()
+    _ensure("Config OK" in captured.out, "Success output should mention config status")
 
 
 def test_build_adapters_from_config_includes_expected_names(tmp_path: Path) -> None:
