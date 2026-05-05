@@ -156,7 +156,12 @@ def test_packet_roundtrip_v3():
 
 def test_packet_roundtrip_v2():
     pkt = Packet(
-        src=3, dst=4, cmd_set=1, cmd_id=2, payload=b"xy", version=2,
+        src=3,
+        dst=4,
+        cmd_set=1,
+        cmd_id=2,
+        payload=b"xy",
+        version=2,
         seq=b"\x00\x00\x00\x00",
     )
     raw = pkt.toBytes()
@@ -189,8 +194,13 @@ def test_packet_xor_payload_roundtrip():
     original_payload = bytes([0x10, 0x20, 0x30])
     seq = b"\x05\x00\x00\x00"
     pkt = Packet(
-        src=1, dst=2, cmd_set=7, cmd_id=8,
-        payload=original_payload, version=2, seq=seq,
+        src=1,
+        dst=2,
+        cmd_set=7,
+        cmd_id=8,
+        payload=original_payload,
+        version=2,
+        seq=seq,
     )
     raw = pkt.toBytes()
 
@@ -208,8 +218,9 @@ def test_packet_xor_payload_roundtrip():
 def test_packet_xor_payload_skipped_when_seq0_is_zero():
     """Xor_payload=True darf bei seq[0]==0 nichts verändern."""
     payload = bytes([0xAA, 0xBB])
-    pkt = Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=payload,
-                 seq=b"\x00\x00\x00\x00")
+    pkt = Packet(
+        src=1, dst=2, cmd_set=1, cmd_id=1, payload=payload, seq=b"\x00\x00\x00\x00"
+    )
     raw = pkt.toBytes()
     parsed = Packet.fromBytes(raw, xor_payload=True)
     assert parsed.payload == payload
@@ -356,9 +367,9 @@ def test_type7_decode_packets_skips_bad_crc():
     crypto._session_key = b"1" * 16  # type: ignore[attr-defined]
     crypto._iv = b"2" * 16  # type: ignore[attr-defined]
 
-    frame = bytearray(crypto.encode_packet(
-        Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=b"x")
-    ))
+    frame = bytearray(
+        crypto.encode_packet(Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=b"x"))
+    )
     frame[-3] ^= 0xFF  # CRC des äußeren Frames kaputtmachen
     result = crypto.decode_packets(bytes(frame))
     assert result == []
@@ -397,8 +408,14 @@ def test_type1_is_always_ready():
 def test_type1_encode_decode_roundtrip():
     crypto = Type1Crypto("SN123")
     pkt = Packet(
-        src=1, dst=2, dsrc=1, ddst=1, cmd_set=9, cmd_id=10,
-        payload=b"abcdef", seq=b"\x00\x00\x00\x00",
+        src=1,
+        dst=2,
+        dsrc=1,
+        ddst=1,
+        cmd_set=9,
+        cmd_id=10,
+        payload=b"abcdef",
+        seq=b"\x00\x00\x00\x00",
     )
     frame = crypto.encode_packet(pkt)
     packets, buffer = crypto.decode_packets(frame, bytearray())
@@ -413,8 +430,14 @@ def test_type1_xor_payload_applied_on_decode():
     """Decode_packets wendet XOR an; seq[0] != 0 muss payload transformieren."""
     crypto = Type1Crypto("SN123")
     pkt = Packet(
-        src=1, dst=2, dsrc=1, ddst=1, cmd_set=9, cmd_id=10,
-        payload=b"abcdef", seq=b"\x01\x00\x00\x00",
+        src=1,
+        dst=2,
+        dsrc=1,
+        ddst=1,
+        cmd_set=9,
+        cmd_id=10,
+        payload=b"abcdef",
+        seq=b"\x01\x00\x00\x00",
     )
     frame = crypto.encode_packet(pkt)
     packets, _ = crypto.decode_packets(frame, bytearray())
@@ -427,8 +450,14 @@ def test_type1_buffering_partial_frame():
     """Unvollständiger Frame landet im Buffer, zweiter Aufruf ergänzt ihn."""
     crypto = Type1Crypto("SN123")
     pkt = Packet(
-        src=1, dst=2, dsrc=1, ddst=1, cmd_set=9, cmd_id=10,
-        payload=b"abcdef", seq=b"\x01\x00\x00\x00",
+        src=1,
+        dst=2,
+        dsrc=1,
+        ddst=1,
+        cmd_set=9,
+        cmd_id=10,
+        payload=b"abcdef",
+        seq=b"\x01\x00\x00\x00",
     )
     frame = crypto.encode_packet(pkt)
 
