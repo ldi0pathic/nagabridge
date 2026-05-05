@@ -239,9 +239,11 @@ def test_packet_from_bytes_rejects_bad_crc16():
 
 
 def test_packet_no_product_id_in_constructor():
-    """Product_id wurde entfernt - Konstruktor darf dieses Argument nicht mehr kennen."""
+    """Product_id wurde entfernt - Konstruktor kennt dieses Argument nicht mehr."""
     with pytest.raises(TypeError):
-        Packet(src=1, dst=2, cmd_set=0, cmd_id=0, product_id=99)  # type: ignore[call-arg]
+        Packet(  # type: ignore[call-arg]
+            src=1, dst=2, cmd_set=0, cmd_id=0, product_id=99
+        )
 
 
 # =============================================================================
@@ -324,9 +326,9 @@ def test_type7_requires_initialization_before_decrypt_raw():
 
 
 def test_type7_process_key_info_requires_initialization():
-    """Process_key_info darf ohne vorherige Schlüsselinitialisierung nicht stilleise scheitern."""
+    """Process_key_info ohne Init muss ValueError werfen."""
     crypto = Type7Crypto()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Session key not initialized"):
         crypto.process_key_info(b"\x00" * 32)
 
 
@@ -335,7 +337,9 @@ def test_type7_encode_decode_packet_roundtrip():
     crypto._session_key = b"1" * 16  # type: ignore[attr-defined]
     crypto._iv = b"2" * 16  # type: ignore[attr-defined]
 
-    pkt = Packet(src=10, dst=20, dsrc=1, ddst=1, cmd_set=2, cmd_id=3, payload=b"payload")
+    pkt = Packet(
+        src=10, dst=20, dsrc=1, ddst=1, cmd_set=2, cmd_id=3, payload=b"payload"
+    )
     frame = crypto.encode_packet(pkt)
 
     assert frame.startswith(_PREFIX_5A)
