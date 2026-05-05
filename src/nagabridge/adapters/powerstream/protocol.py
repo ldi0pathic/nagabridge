@@ -9,9 +9,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import struct
-from typing import cast
 
-import ecdsa  # type: ignore[import-not-found,import-untyped]
+import ecdsa  # type: ignore[import-untyped]
 from crc import Calculator, Configuration
 from Crypto.Cipher import AES  # nosec B413
 from Crypto.PublicKey import ECC  # nosec B413
@@ -227,7 +226,7 @@ class Type7Crypto:
             cipher.decrypt(pad(s_rand + seed + bytes(14), AES.block_size)),
             AES.block_size,
         )
-        return cast("bytes", decrypted[:16])
+        return bytes(decrypted[:16])
 
     def _require_session_key(self) -> bytes:
         if self._session_key is None:
@@ -243,15 +242,15 @@ class Type7Crypto:
 
     def encrypt(self, data: bytes) -> bytes:
         cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return cast("bytes", cipher.encrypt(pad(data, AES.block_size)))
+        return bytes(cipher.encrypt(pad(data, AES.block_size)))
 
     def decrypt(self, data: bytes) -> bytes:
         cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return cast("bytes", unpad(cipher.decrypt(data), AES.block_size))
+        return bytes(unpad(cipher.decrypt(data), AES.block_size))
 
     def decrypt_raw(self, data: bytes) -> bytes:
         cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return cast("bytes", cipher.decrypt(data))
+        return bytes(cipher.decrypt(data))
 
     def encode_packet(self, packet: Packet) -> bytes:
         raw = packet.toBytes()
@@ -315,11 +314,11 @@ class Type1Crypto:
         padded_len = (len(data) + 15) // 16 * 16
         padded = data + b"\x00" * (padded_len - len(data))
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
-        return cast("bytes", cipher.encrypt(padded))
+        return bytes(cipher.encrypt(padded))
 
     def decrypt(self, data: bytes) -> bytes:
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
-        return cast("bytes", cipher.decrypt(data))
+        return bytes(cipher.decrypt(data))
 
     def encode_packet(self, packet: Packet) -> bytes:
         raw = packet.toBytes()
