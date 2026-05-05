@@ -11,9 +11,9 @@ import struct
 
 import ecdsa
 from crc import Calculator, Configuration, Crc8
-from Crypto.Cipher import AES
-from Crypto.PublicKey import ECC
-from Crypto.Util.Padding import pad, unpad
+from Crypto.Cipher import AES  # nosec B413
+from Crypto.PublicKey import ECC  # nosec B413
+from Crypto.Util.Padding import pad, unpad  # nosec B413
 
 log = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ class Type7Crypto:
             self._private_key,
             dev_pub,
         ).generate_sharedsecret_bytes()
-        self._iv = hashlib.md5(shared).digest()
+        self._iv = hashlib.md5(shared, usedforsecurity=False).digest()
         self._session_key = shared[:16]
         log.debug("Type7: shared key established, iv=%s", self._iv.hex())
 
@@ -305,8 +305,8 @@ class Type1Crypto:
     """Type1 Encryption für PowerStream — Key aus Seriennummer"""
 
     def __init__(self, dev_sn: str):
-        key = hashlib.md5(dev_sn.encode()).digest()
-        iv = hashlib.md5(dev_sn[::-1].encode()).digest()
+        key = hashlib.md5(dev_sn.encode(), usedforsecurity=False).digest()
+        iv = hashlib.md5(dev_sn[::-1].encode(), usedforsecurity=False).digest()
         self._key = key
         self._iv = iv
 
@@ -380,5 +380,7 @@ class Type1Crypto:
 
 def build_auth_md5(user_id: str, dev_sn: str) -> bytes:
     """MD5(user_id + serial) als HEX-ASCII — für autoAuthentication"""
-    md5_data = hashlib.md5((user_id + dev_sn).encode("ASCII")).digest()
+    md5_data = hashlib.md5(
+        (user_id + dev_sn).encode("ASCII"), usedforsecurity=False,
+    ).digest()
     return ("".join(f"{c:02X}" for c in md5_data)).encode("ASCII")
