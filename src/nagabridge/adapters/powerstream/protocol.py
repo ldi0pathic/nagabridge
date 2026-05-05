@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 """EcoFlow BLE protocol helpers for PowerStream adapters."""
+
+from __future__ import annotations
 
 # =============================================================================
 # protocol.py - EcoFlow BLE Protokoll (portiert von ha-ef-ble)
 # Quelle: https://github.com/rabits/ha-ef-ble (Apache-2.0)
 # =============================================================================
-
 import hashlib
 import logging
 import struct
@@ -124,7 +123,9 @@ class Packet:
         payload_length = struct.unpack("<H", data[2:4])[0]
         if crc8(data[:4]) != data[4]:
             raise ValueError(f"CRC8 mismatch: {data.hex()}")
-        if version in [2, 3, 4] and crc16(data[:-2]) != struct.unpack("<H", data[-2:])[0]:
+        if version in [2, 3, 4] and crc16(data[:-2]) != struct.unpack(
+            "<H", data[-2:],
+        )[0]:
             raise ValueError(f"CRC16 mismatch: {data.hex()}")
         seq = data[6:10]
         src = data[12]
@@ -135,7 +136,11 @@ class Packet:
             cmd_set, cmd_id = data[14:16]
         else:
             dsrc, ddst, cmd_set, cmd_id = data[14:18]
-        payload = data[payload_start : payload_start + payload_length] if payload_length else b""
+        payload = (
+            data[payload_start : payload_start + payload_length]
+            if payload_length
+            else b""
+        )
 
         if xor_payload and seq[0] != 0:
             payload = bytes([c ^ seq[0] for c in payload])
@@ -159,7 +164,9 @@ PREFIX_5A = b"\x5a\x5a"
 def encode_simple(payload: bytes) -> bytes:
     frame_type = 0x11
     payload_type = 0x01
-    inner = bytes([frame_type, payload_type]) + struct.pack("<H", len(payload)) + payload
+    inner = (
+        bytes([frame_type, payload_type]) + struct.pack("<H", len(payload)) + payload
+    )
     return PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
 
@@ -189,8 +196,12 @@ class Type7Crypto:
         self._iv: bytes | None = None
 
     def compute_shared_key(self, dev_pubkey_bytes: bytes) -> None:
-        dev_pub = ecdsa.VerifyingKey.from_string(dev_pubkey_bytes, curve=ecdsa.SECP160r1)
-        shared = ecdsa.ECDH(ecdsa.SECP160r1, self._private_key, dev_pub).generate_sharedsecret_bytes()
+        dev_pub = ecdsa.VerifyingKey.from_string(
+            dev_pubkey_bytes, curve=ecdsa.SECP160r1,
+        )
+        shared = ecdsa.ECDH(
+            ecdsa.SECP160r1, self._private_key, dev_pub,
+        ).generate_sharedsecret_bytes()
         self._iv = hashlib.md5(shared, usedforsecurity=False).digest()
         self._session_key = shared[:16]
         log.debug("Type7: shared key established, iv=%s", self._iv.hex())
@@ -204,37 +215,46 @@ class Type7Crypto:
 
     def _gen_session_key(self, seed: bytes, s_rand: bytes) -> bytes:
         cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        decrypted = unpad(cipher.decrypt(pad(s_rand + seed + bytes(14), AES.block_size)), AES.block_size)
-        return cast(bytes, decrypted[:16])
+        decrypted = unpad(
+            cipher.decrypt(pad(s_rand + seed + bytes(14), AES.block_size)),
+            AES.block_size,
+        )
+        return cast("bytes", decrypted[:16])
 
     def _require_session_key(self) -> bytes:
         if self._session_key is None:
-            raise ValueError("Session key not initialized")
+            msg = "Session key not initialized"
+            raise ValueError(msg)
         return self._session_key
 
     def _require_iv(self) -> bytes:
         if self._iv is None:
-            raise ValueError("IV not initialized")
+            msg = "IV not initialized"
+            raise ValueError(msg)
         return self._iv
 
     def encrypt(self, data: bytes) -> bytes:
         cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return cast(bytes, cipher.encrypt(pad(data, AES.block_size)))
+        return cast("bytes", cipher.encrypt(pad(data, AES.block_size)))
 
     def decrypt(self, data: bytes) -> bytes:
         cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return cast(bytes, unpad(cipher.decrypt(data), AES.block_size))
+        return cast("bytes", unpad(cipher.decrypt(data), AES.block_size))
 
     def decrypt_raw(self, data: bytes) -> bytes:
         cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return cast(bytes, cipher.decrypt(data))
+        return cast("bytes", cipher.decrypt(data))
 
     def encode_packet(self, packet: Packet) -> bytes:
         raw = packet.toBytes()
         encrypted = self.encrypt(raw)
         frame_type = 0x10
         payload_type = 0x01
-        inner = bytes([frame_type, payload_type]) + struct.pack("<H", len(encrypted)) + encrypted
+        inner = (
+            bytes([frame_type, payload_type])
+            + struct.pack("<H", len(encrypted))
+            + encrypted
+        )
         return PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
     def decode_packets(self, data: bytes) -> list[Packet]:
@@ -287,17 +307,19 @@ class Type1Crypto:
         padded_len = (len(data) + 15) // 16 * 16
         padded = data + b"\x00" * (padded_len - len(data))
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
-        return cast(bytes, cipher.encrypt(padded))
+        return cast("bytes", cipher.encrypt(padded))
 
     def decrypt(self, data: bytes) -> bytes:
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
-        return cast(bytes, cipher.decrypt(data))
+        return cast("bytes", cipher.decrypt(data))
 
     def encode_packet(self, packet: Packet) -> bytes:
         raw = packet.toBytes()
         return raw[:5] + self.encrypt(raw[5:])
 
-    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[Packet], bytearray]:
+    def decode_packets(
+        self, data: bytes, buffer: bytearray,
+    ) -> tuple[list[Packet], bytearray]:
         data = bytes(buffer) + data
         buffer = bytearray()
         packets: list[Packet] = []
@@ -325,7 +347,9 @@ class Type1Crypto:
             data = data[frame_len:]
             try:
                 decrypted = self.decrypt(encrypted_body)
-                packets.append(Packet.fromBytes(header + decrypted[:inner_len], xor_payload=True))
+                packets.append(
+                    Packet.fromBytes(header + decrypted[:inner_len], xor_payload=True),
+                )
             except Exception as e:
                 log.debug("Type1 decode error: %s", e)
         return packets, buffer
@@ -336,5 +360,7 @@ class Type1Crypto:
 
 
 def build_auth_md5(user_id: str, dev_sn: str) -> bytes:
-    md5_data = hashlib.md5((user_id + dev_sn).encode("ASCII"), usedforsecurity=False).digest()
+    md5_data = hashlib.md5(
+        (user_id + dev_sn).encode("ASCII"), usedforsecurity=False,
+    ).digest()
     return ("".join(f"{c:02X}" for c in md5_data)).encode("ASCII")
