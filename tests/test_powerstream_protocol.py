@@ -118,7 +118,6 @@ from nagabridge.adapters.powerstream.protocol import (
     Type1Crypto,
     Type7Crypto,
     build_auth_md5,
-    crc8,
     encode_simple,
     parse_simple,
 )
@@ -151,7 +150,9 @@ def test_packet_roundtrip_v3():
 def test_packet_roundtrip_v2_and_xor_payload():
     original_payload = bytes([0x10, 0x20, 0x30])
     seq = b"\x05\x00\x00\x00"
-    pkt = Packet(src=1, dst=2, cmd_set=7, cmd_id=8, payload=original_payload, version=2, seq=seq)
+    pkt = Packet(
+        src=1, dst=2, cmd_set=7, cmd_id=8, payload=original_payload, version=2, seq=seq
+    )
 
     raw = pkt.toBytes()
     payload_start = 16
@@ -211,7 +212,9 @@ def test_type7_encode_decode_packet_with_manually_seeded_keys():
     crypto._session_key = b"1" * 16  # type: ignore[attr-defined]
     crypto._iv = b"2" * 16  # type: ignore[attr-defined]
 
-    pkt = Packet(src=10, dst=20, dsrc=1, ddst=1, cmd_set=2, cmd_id=3, payload=b"payload")
+    pkt = Packet(
+        src=10, dst=20, dsrc=1, ddst=1, cmd_set=2, cmd_id=3, payload=b"payload"
+    )
     frame = crypto.encode_packet(pkt)
     decoded = crypto.decode_packets(frame)
 
@@ -221,7 +224,16 @@ def test_type7_encode_decode_packet_with_manually_seeded_keys():
 
 def test_type1_encode_decode_packets_and_buffering():
     crypto = Type1Crypto("SN123")
-    pkt = Packet(src=1, dst=2, dsrc=1, ddst=1, cmd_set=9, cmd_id=10, payload=b"abcdef", seq=b"\x01\x00\x00\x00")
+    pkt = Packet(
+        src=1,
+        dst=2,
+        dsrc=1,
+        ddst=1,
+        cmd_set=9,
+        cmd_id=10,
+        payload=b"abcdef",
+        seq=b"\x01\x00\x00\x00",
+    )
     frame = crypto.encode_packet(pkt)
 
     partial = frame[:8]
