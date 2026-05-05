@@ -160,7 +160,8 @@ class Packet:
 
     @staticmethod
     def _parse_routing_fields(
-        data: bytes, version: int,
+        data: bytes,
+        version: int,
     ) -> tuple[int, int, int, int, int]:
         payload_start = 16 if version == 2 else 18
         if version == 2:
