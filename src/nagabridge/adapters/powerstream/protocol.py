@@ -381,6 +381,7 @@ class Type1Crypto:
 def build_auth_md5(user_id: str, dev_sn: str) -> bytes:
     """MD5(user_id + serial) als HEX-ASCII — für autoAuthentication"""
     md5_data = hashlib.md5(
-        (user_id + dev_sn).encode("ASCII"), usedforsecurity=False,
+        (user_id + dev_sn).encode("ASCII"),
+        usedforsecurity=False,
     ).digest()
     return ("".join(f"{c:02X}" for c in md5_data)).encode("ASCII")
