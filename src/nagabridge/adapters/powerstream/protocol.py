@@ -123,9 +123,14 @@ class Packet:
         payload_length = struct.unpack("<H", data[2:4])[0]
         if crc8(data[:4]) != data[4]:
             raise ValueError(f"CRC8 mismatch: {data.hex()}")
-        if version in [2, 3, 4] and crc16(data[:-2]) != struct.unpack(
-            "<H", data[-2:],
-        )[0]:
+        if (
+            version in [2, 3, 4]
+            and crc16(data[:-2])
+            != struct.unpack(
+                "<H",
+                data[-2:],
+            )[0]
+        ):
             raise ValueError(f"CRC16 mismatch: {data.hex()}")
         seq = data[6:10]
         src = data[12]
@@ -197,10 +202,13 @@ class Type7Crypto:
 
     def compute_shared_key(self, dev_pubkey_bytes: bytes) -> None:
         dev_pub = ecdsa.VerifyingKey.from_string(
-            dev_pubkey_bytes, curve=ecdsa.SECP160r1,
+            dev_pubkey_bytes,
+            curve=ecdsa.SECP160r1,
         )
         shared = ecdsa.ECDH(
-            ecdsa.SECP160r1, self._private_key, dev_pub,
+            ecdsa.SECP160r1,
+            self._private_key,
+            dev_pub,
         ).generate_sharedsecret_bytes()
         self._iv = hashlib.md5(shared, usedforsecurity=False).digest()
         self._session_key = shared[:16]
@@ -318,7 +326,9 @@ class Type1Crypto:
         return raw[:5] + self.encrypt(raw[5:])
 
     def decode_packets(
-        self, data: bytes, buffer: bytearray,
+        self,
+        data: bytes,
+        buffer: bytearray,
     ) -> tuple[list[Packet], bytearray]:
         data = bytes(buffer) + data
         buffer = bytearray()
@@ -361,6 +371,7 @@ class Type1Crypto:
 
 def build_auth_md5(user_id: str, dev_sn: str) -> bytes:
     md5_data = hashlib.md5(
-        (user_id + dev_sn).encode("ASCII"), usedforsecurity=False,
+        (user_id + dev_sn).encode("ASCII"),
+        usedforsecurity=False,
     ).digest()
     return ("".join(f"{c:02X}" for c in md5_data)).encode("ASCII")
