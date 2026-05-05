@@ -159,7 +159,9 @@ class Packet:
                 raise ValueError(f"CRC16 mismatch: {data.hex()}")
 
     @staticmethod
-    def _parse_routing_fields(data: bytes, version: int) -> tuple[int, int, int, int, int]:
+    def _parse_routing_fields(
+        data: bytes, version: int,
+    ) -> tuple[int, int, int, int, int]:
         payload_start = 16 if version == 2 else 18
         if version == 2:
             cmd_set, cmd_id = data[14:16]
