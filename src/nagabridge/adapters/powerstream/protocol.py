@@ -64,7 +64,6 @@ class Packet:
         ddst: int = 1,
         version: int = 3,
         seq: bytes | None = None,
-        product_id: int = 0,
     ) -> None:
         self._src = src
         self._dst = dst
@@ -75,7 +74,6 @@ class Packet:
         self._ddst = ddst
         self._version = version
         self._seq = seq if seq is not None else b"\x00\x00\x00\x00"
-        self._product_id = product_id
 
     @property
     def src(self) -> int:
@@ -181,7 +179,7 @@ class Packet:
         return bytes(c ^ xor_key for c in payload)
 
 
-PREFIX_5A = b"\x5a\x5a"
+_PREFIX_5A = b"\x5a\x5a"
 
 
 def encode_simple(payload: bytes) -> bytes:
@@ -190,11 +188,11 @@ def encode_simple(payload: bytes) -> bytes:
     inner = (
         bytes([frame_type, payload_type]) + struct.pack("<H", len(payload)) + payload
     )
-    return PREFIX_5A + inner + struct.pack("<H", crc16(inner))
+    return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
 
 def parse_simple(data: bytes) -> bytes | None:
-    start = data.find(PREFIX_5A)
+    start = data.find(_PREFIX_5A)
     if start < 0:
         return None
     data = data[start:]
@@ -233,6 +231,9 @@ class Type7Crypto:
         log.debug("Type7: shared key established, iv=%s", self._iv.hex())
 
     def process_key_info(self, encrypted_data: bytes) -> None:
+        # Guards sicherstellen bevor wir entschlüsseln
+        self._require_session_key()
+        self._require_iv()
         raw = self.decrypt_raw(encrypted_data)
         s_rand = raw[:16]
         seed = raw[16:18]
@@ -281,12 +282,12 @@ class Type7Crypto:
             + struct.pack("<H", len(encrypted))
             + encrypted
         )
-        return PREFIX_5A + inner + struct.pack("<H", crc16(inner))
+        return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
     def decode_packets(self, data: bytes) -> list[Packet]:
         packets: list[Packet] = []
         while data:
-            start = data.find(PREFIX_5A)
+            start = data.find(_PREFIX_5A)
             if start < 0:
                 break
             if start > 0:
@@ -307,7 +308,7 @@ class Type7Crypto:
                 decrypted = self.decrypt(payload_enc)
                 packets.append(Packet.fromBytes(decrypted))
             except Exception as e:
-                log.debug("Decode error: %s", e)
+                log.warning("Type7 decode error (%s): %s", type(e).__name__, e)
         return packets
 
     @property
@@ -379,7 +380,7 @@ class Type1Crypto:
                     Packet.fromBytes(header + decrypted[:inner_len], xor_payload=True),
                 )
             except Exception as e:
-                log.debug("Type1 decode error: %s", e)
+                log.warning("Type1 decode error (%s): %s", type(e).__name__, e)
         return packets, buffer
 
     @property
