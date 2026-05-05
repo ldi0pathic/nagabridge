@@ -112,7 +112,7 @@ if "Crypto" not in sys.modules:
     sys.modules["Crypto.Util"] = util_mod
     sys.modules["Crypto.Util.Padding"] = padding_mod
 
-from nagabridge.adapters.powerstream.protocol import (  # noqa: E402
+from nagabridge.adapters.powerstream.protocol import (
     Packet,
     Type1Crypto,
     Type7Crypto,
@@ -122,12 +122,12 @@ from nagabridge.adapters.powerstream.protocol import (  # noqa: E402
     parse_simple,
 )
 
-# PREFIX_5A ist jetzt _PREFIX_5A (modulintern) – wir rekonstruieren es lokal
+# PREFIX_5A ist jetzt _PREFIX_5A (modulintern) - wir rekonstruieren es lokal
 _PREFIX_5A = b"\x5a\x5a"
 
 
 # =============================================================================
-# Packet – toBytes / fromBytes
+# Packet - toBytes / fromBytes
 # =============================================================================
 
 
@@ -185,7 +185,7 @@ def test_packet_default_seq_is_four_zero_bytes():
 
 
 def test_packet_xor_payload_roundtrip():
-    """fromBytes mit xor_payload=True muss das XOR korrekt rückgängig machen."""
+    """``fromBytes`` mit xor_payload=True muss das XOR korrekt rueckgaengig machen."""
     original_payload = bytes([0x10, 0x20, 0x30])
     seq = b"\x05\x00\x00\x00"
     pkt = Packet(
@@ -206,7 +206,7 @@ def test_packet_xor_payload_roundtrip():
 
 
 def test_packet_xor_payload_skipped_when_seq0_is_zero():
-    """xor_payload=True darf bei seq[0]==0 nichts verändern."""
+    """Xor_payload=True darf bei seq[0]==0 nichts verändern."""
     payload = bytes([0xAA, 0xBB])
     pkt = Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=payload,
                  seq=b"\x00\x00\x00\x00")
@@ -239,7 +239,7 @@ def test_packet_from_bytes_rejects_bad_crc16():
 
 
 def test_packet_no_product_id_in_constructor():
-    """product_id wurde entfernt – Konstruktor darf dieses Argument nicht mehr kennen."""
+    """Product_id wurde entfernt - Konstruktor darf dieses Argument nicht mehr kennen."""
     with pytest.raises(TypeError):
         Packet(src=1, dst=2, cmd_set=0, cmd_id=0, product_id=99)  # type: ignore[call-arg]
 
@@ -255,7 +255,7 @@ def test_encode_simple_starts_with_prefix():
 
 
 def test_encode_and_parse_simple_roundtrip():
-    """parse_simple muss die ursprüngliche Payload zurückgeben."""
+    """Parse_simple muss die ursprüngliche Payload zurückgeben."""
     payload = b"hello"
     encoded = encode_simple(payload)
     result = parse_simple(encoded)
@@ -324,7 +324,7 @@ def test_type7_requires_initialization_before_decrypt_raw():
 
 
 def test_type7_process_key_info_requires_initialization():
-    """process_key_info darf ohne vorherige Schlüsselinitialisierung nicht stilleise scheitern."""
+    """Process_key_info darf ohne vorherige Schlüsselinitialisierung nicht stilleise scheitern."""
     crypto = Type7Crypto()
     with pytest.raises(ValueError):
         crypto.process_key_info(b"\x00" * 32)
@@ -406,7 +406,7 @@ def test_type1_encode_decode_roundtrip():
 
 
 def test_type1_xor_payload_applied_on_decode():
-    """decode_packets wendet XOR an; seq[0] != 0 muss payload transformieren."""
+    """Decode_packets wendet XOR an; seq[0] != 0 muss payload transformieren."""
     crypto = Type1Crypto("SN123")
     pkt = Packet(
         src=1, dst=2, dsrc=1, ddst=1, cmd_set=9, cmd_id=10,
@@ -456,7 +456,7 @@ def test_type1_skips_garbage_before_valid_prefix():
     crypto = Type1Crypto("SN123")
     pkt = Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=b"hi")
     frame = crypto.encode_packet(pkt)
-    # Führende Nullen vor dem Frame – Decoder soll überspringen
+    # Führende Nullen vor dem Frame - Decoder soll überspringen
     packets, _ = crypto.decode_packets(b"\x00\x00\x00" + frame, bytearray())
     assert len(packets) == 1
 
