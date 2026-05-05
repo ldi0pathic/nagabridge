@@ -54,3 +54,14 @@ explicit_package_bases = true
 "src/nagabridge/adapters/powerstream/protocol.py" = [
     "ANN", "BLE001", "D", "EM102", "FBT001", "FBT002", "N802", "PLR0913", "PLR2004", "S324", "SIM102", "TRY003"
 ]
+
+"tests/**/*.py" = [
+    "ANN201",
+    "COM812",
+    "D100",
+    "D103",
+    "PLC0415",
+    "PLR2004",
+    "S101",
+    "SLF001",
+]
