@@ -118,36 +118,18 @@ class Packet:
     def fromBytes(data: bytes, xor_payload: bool = False) -> Packet:
         if not data.startswith(Packet.PREFIX):
             raise ValueError(f"Bad prefix: {data.hex()}")
-        version = data[1]
-        payload_length = struct.unpack("<H", data[2:4])[0]
-        if crc8(data[:4]) != data[4]:
-            raise ValueError(f"CRC8 mismatch: {data.hex()}")
-        if (
-            version in [2, 3, 4]
-            and crc16(data[:-2])
-            != struct.unpack(
-                "<H",
-                data[-2:],
-            )[0]
-        ):
-            raise ValueError(f"CRC16 mismatch: {data.hex()}")
+        version, payload_length = Packet._parse_header(data)
+        Packet._validate_crcs(data, version)
         seq = data[6:10]
         src = data[12]
         dst = data[13]
-        payload_start = 16 if version == 2 else 18
-        dsrc = ddst = 0
-        if version == 2:
-            cmd_set, cmd_id = data[14:16]
-        else:
-            dsrc, ddst, cmd_set, cmd_id = data[14:18]
-        payload = (
-            data[payload_start : payload_start + payload_length]
-            if payload_length
-            else b""
+        payload_start, dsrc, ddst, cmd_set, cmd_id = Packet._parse_routing_fields(
+            data,
+            version,
         )
-
+        payload = Packet._extract_payload(data, payload_start, payload_length)
         if xor_payload and seq[0] != 0:
-            payload = bytes([c ^ seq[0] for c in payload])
+            payload = Packet._xor_payload(payload, seq[0])
 
         return Packet(
             src=src,
@@ -160,6 +142,40 @@ class Packet:
             version=version,
             seq=seq,
         )
+
+    @staticmethod
+    def _parse_header(data: bytes) -> tuple[int, int]:
+        version = data[1]
+        payload_length = struct.unpack("<H", data[2:4])[0]
+        return version, payload_length
+
+    @staticmethod
+    def _validate_crcs(data: bytes, version: int) -> None:
+        if crc8(data[:4]) != data[4]:
+            raise ValueError(f"CRC8 mismatch: {data.hex()}")
+        if version in [2, 3, 4]:
+            expected_crc16 = struct.unpack("<H", data[-2:])[0]
+            if crc16(data[:-2]) != expected_crc16:
+                raise ValueError(f"CRC16 mismatch: {data.hex()}")
+
+    @staticmethod
+    def _parse_routing_fields(data: bytes, version: int) -> tuple[int, int, int, int, int]:
+        payload_start = 16 if version == 2 else 18
+        if version == 2:
+            cmd_set, cmd_id = data[14:16]
+            return payload_start, 0, 0, cmd_set, cmd_id
+        dsrc, ddst, cmd_set, cmd_id = data[14:18]
+        return payload_start, dsrc, ddst, cmd_set, cmd_id
+
+    @staticmethod
+    def _extract_payload(data: bytes, payload_start: int, payload_length: int) -> bytes:
+        if payload_length == 0:
+            return b""
+        return data[payload_start : payload_start + payload_length]
+
+    @staticmethod
+    def _xor_payload(payload: bytes, xor_key: int) -> bytes:
+        return bytes(c ^ xor_key for c in payload)
 
 
 PREFIX_5A = b"\x5a\x5a"
