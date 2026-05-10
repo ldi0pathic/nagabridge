@@ -337,7 +337,6 @@ def test_parse_simple_ignores_leading_garbage():
 
 def _make_type7_pair() -> tuple["Type7Crypto", "Type7Crypto"]:
     """Return two Type7Crypto instances that have completed a mutual key exchange."""
-    import ecdsa as _ecdsa
 
     alice = Type7Crypto()
     bob = Type7Crypto()
