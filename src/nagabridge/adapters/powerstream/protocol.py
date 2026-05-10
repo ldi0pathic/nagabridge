@@ -1,428 +1,312 @@
-"""EcoFlow BLE protocol helpers for PowerStream adapters."""
+"""EcoFlow BLE protocol helpers for PowerStream adapters.
+
+PowerStream devices use the EcoFlow Type1 transport: an ``AA`` packet header
+followed by an AES-CBC encrypted packet body.  The AES key and IV are derived
+from the device serial number.  Type7/ECDH crypto is intentionally not part of
+this module because PowerStream does not use it.
+"""
 
 from __future__ import annotations
 
-# =============================================================================
-# protocol.py - EcoFlow BLE Protokoll (portiert von ha-ef-ble)
-# Quelle: https://github.com/rabits/ha-ef-ble (Apache-2.0)
-# =============================================================================
 import hashlib
 import logging
 import struct
+from dataclasses import dataclass
 
-import ecdsa  # type: ignore[import-untyped]
-from crc import Calculator, Configuration
-from Crypto.Cipher import AES  # nosec B413
-from Crypto.PublicKey import ECC  # nosec B413
-from Crypto.Util.Padding import pad, unpad  # nosec B413
+from Crypto.Cipher import AES  # nosec B413 - protocol compatibility with EcoFlow Type1
 
 log = logging.getLogger(__name__)
 
-# --- BLE UUIDs ---------------------------------------------------------------
-UUID_NOTIFY = "00000003-0000-1000-8000-00805f9b34fb"
+# BLE GATT characteristics used by EcoFlow PowerStream.
 UUID_WRITE = "00000002-0000-1000-8000-00805f9b34fb"
+UUID_NOTIFY = "00000003-0000-1000-8000-00805f9b34fb"
 
-# --- CRC (aus crc.py von ha-ef-ble) -----------------------------------------
-_crc8_cfg = Configuration(
-    width=8,
-    polynomial=0x07,
-    init_value=0x00,
-    final_xor_value=0x00,
-    reverse_input=False,
-    reverse_output=False,
-)
-
-_crc16_cfg = Configuration(
-    width=16,
-    polynomial=0x8005,
-    init_value=0x0000,
-    final_xor_value=0x0000,
-    reverse_input=True,
-    reverse_output=True,
-)
+# Frequently used protocol constants.  Additional command IDs will be added when
+# parser and adapter command handling are implemented in later plan steps.
+PACKET_PREFIX = b"\xaa"
+ENC_PACKET_PREFIX = b"\x5a\x5a"
+DEFAULT_VERSION = 0x03
+DEFAULT_SEQUENCE = b"\x00\x00\x00\x00"
+SIMPLE_FRAME_TYPE = 0x11
+ENCRYPTED_FRAME_TYPE = 0x10
+DEFAULT_PAYLOAD_TYPE = 0x01
+HEADER_LENGTH = 5
+CRC16_LENGTH = 2
+COMMAND_SET_COMMON = 0x01
+COMMAND_SET_POWERSTREAM = 0x02
+COMMAND_ID_AUTH = 0x20
+COMMAND_ID_HEARTBEAT = 0x21
+COMMAND_ID_GET_STATUS = 0x22
+COMMAND_ID_SET_LOAD_POWER = 0x23
 
 
 def crc8(data: bytes) -> int:
-    return int(Calculator(_crc8_cfg).checksum(data))
+    """Return EcoFlow's CRC-8/CCITT checksum for *data*.
+
+    This matches the prototype's ``crc.Crc8.CCITT`` use: polynomial ``0x07``,
+    initial value ``0x00``, no reflection and no final XOR.
+    """
+    crc = 0x00
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            if crc & 0x80:
+                crc = ((crc << 1) ^ 0x07) & 0xFF
+            else:
+                crc = (crc << 1) & 0xFF
+    return crc
 
 
 def crc16(data: bytes) -> int:
-    return int(Calculator(_crc16_cfg).checksum(data))
+    """Return EcoFlow's reflected CRC-16/IBM checksum for *data*."""
+    crc = 0x0000
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            if crc & 0x0001:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc >>= 1
+    return crc & 0xFFFF
 
 
+@dataclass(frozen=True, slots=True)
 class Packet:
-    PREFIX = b"\xaa"
+    """EcoFlow inner packet.
 
-    def __init__(
-        self,
-        src: int,
-        dst: int,
-        cmd_set: int,
-        cmd_id: int,
-        payload: bytes = b"",
-        dsrc: int = 1,
-        ddst: int = 1,
-        version: int = 3,
-        seq: bytes | None = None,
-    ) -> None:
-        self._src = src
-        self._dst = dst
-        self._cmd_set = cmd_set
-        self._cmd_id = cmd_id
-        self._payload = payload
-        self._dsrc = dsrc
-        self._ddst = ddst
-        self._version = version
-        self._seq = seq if seq is not None else b"\x00\x00\x00\x00"
+    The public constructor intentionally accepts the same core fields that the
+    prototype used, but PowerStream-specific code should prefer the snake_case
+    properties.  ``cmdSet`` and ``cmdId`` remain as read-only compatibility
+    aliases until the rest of the adapter is migrated.
+    """
 
-    @property
-    def src(self) -> int:
-        return self._src
+    src: int
+    dst: int
+    cmd_set: int
+    cmd_id: int
+    payload: bytes = b""
+    dsrc: int = 1
+    ddst: int = 1
+    version: int = DEFAULT_VERSION
+    seq: bytes = DEFAULT_SEQUENCE
 
-    @property
-    def dst(self) -> int:
-        return self._dst
+    PREFIX = PACKET_PREFIX
 
-    @property
-    def cmdSet(self) -> int:
-        return self._cmd_set
+    def __post_init__(self) -> None:
+        if len(self.seq) != 4:
+            msg = "Packet sequence must be exactly four bytes"
+            raise ValueError(msg)
+        for field_name in ("src", "dst", "cmd_set", "cmd_id", "dsrc", "ddst", "version"):
+            value = getattr(self, field_name)
+            if not 0 <= value <= 0xFF:
+                msg = f"Packet {field_name} must fit into one byte"
+                raise ValueError(msg)
+        if len(self.payload) > 0xFFFF:
+            msg = "Packet payload is too large"
+            raise ValueError(msg)
 
     @property
-    def cmdId(self) -> int:
-        return self._cmd_id
+    def cmdSet(self) -> int:  # noqa: N802 - legacy adapter compatibility
+        """Compatibility alias for legacy camelCase callers."""
+        return self.cmd_set
 
     @property
-    def payload(self) -> bytes:
-        return self._payload
+    def cmdId(self) -> int:  # noqa: N802 - legacy adapter compatibility
+        """Compatibility alias for legacy camelCase callers."""
+        return self.cmd_id
 
-    @property
-    def version(self) -> int:
-        return self._version
+    def to_bytes(self) -> bytes:
+        """Serialize this packet and append protocol checksums."""
+        data = bytearray(PACKET_PREFIX)
+        data.extend(struct.pack("<BH", self.version, len(self.payload)))
+        data.append(crc8(bytes(data)))
+        data.extend(b"\x0d")
+        data.extend(self.seq)
+        data.extend(b"\x00\x00")
+        data.extend(struct.pack("<BB", self.src, self.dst))
+        if self.version >= 0x03:
+            data.extend(struct.pack("<BB", self.dsrc, self.ddst))
+        data.extend(struct.pack("<BB", self.cmd_set, self.cmd_id))
+        data.extend(self.payload)
+        data.extend(struct.pack("<H", crc16(bytes(data))))
+        return bytes(data)
 
-    def toBytes(self) -> bytes:
-        data = Packet.PREFIX
-        data += struct.pack("<B", self._version) + struct.pack("<H", len(self._payload))
-        data += struct.pack("<B", crc8(data))
-        data += b"\x0d" + self._seq + b"\x00\x00"
-        data += struct.pack("<B", self._src) + struct.pack("<B", self._dst)
-        if self._version >= 0x03:
-            data += struct.pack("<B", self._dsrc) + struct.pack("<B", self._ddst)
-        data += struct.pack("<B", self._cmd_set) + struct.pack("<B", self._cmd_id)
-        data += self._payload
-        data += struct.pack("<H", crc16(data))
-        return data
+    def toBytes(self) -> bytes:  # noqa: N802 - legacy adapter compatibility
+        """Compatibility wrapper around :meth:`to_bytes`."""
+        return self.to_bytes()
 
-    @staticmethod
-    def fromBytes(data: bytes, xor_payload: bool = False) -> Packet:
-        if not data.startswith(Packet.PREFIX):
+    @classmethod
+    def from_bytes(cls, data: bytes, *, xor_payload: bool = False) -> Packet:
+        """Parse and validate an EcoFlow packet.
+
+        Args:
+            data: Raw packet bytes starting with ``0xAA``.
+            xor_payload: Undo the PowerStream payload XOR using ``seq[0]``.
+
+        Raises:
+            ValueError: If the frame is truncated, malformed or has invalid CRCs.
+        """
+        if len(data) < HEADER_LENGTH:
+            raise ValueError(f"Packet too short: {data.hex()}")
+        if not data.startswith(PACKET_PREFIX):
             raise ValueError(f"Bad prefix: {data.hex()}")
-        version, payload_length = Packet._parse_header(data)
-        Packet._validate_crcs(data, version)
-        seq = data[6:10]
-        src = data[12]
-        dst = data[13]
-        payload_start, dsrc, ddst, cmd_set, cmd_id = Packet._parse_routing_fields(
-            data,
-            version,
-        )
-        payload = Packet._extract_payload(data, payload_start, payload_length)
-        if xor_payload and seq[0] != 0:
-            payload = Packet._xor_payload(payload, seq[0])
 
-        return Packet(
-            src=src,
-            dst=dst,
-            cmd_set=cmd_set,
-            cmd_id=cmd_id,
-            payload=payload,
-            dsrc=dsrc,
-            ddst=ddst,
-            version=version,
-            seq=seq,
-        )
-
-    @staticmethod
-    def _parse_header(data: bytes) -> tuple[int, int]:
         version = data[1]
         payload_length = struct.unpack("<H", data[2:4])[0]
-        return version, payload_length
-
-    @staticmethod
-    def _validate_crcs(data: bytes, version: int) -> None:
-        if crc8(data[:4]) != data[4]:
-            raise ValueError(f"CRC8 mismatch: {data.hex()}")
-        if version in [2, 3, 4]:
-            expected_crc16 = struct.unpack("<H", data[-2:])[0]
-            if crc16(data[:-2]) != expected_crc16:
-                raise ValueError(f"CRC16 mismatch: {data.hex()}")
-
-    @staticmethod
-    def _parse_routing_fields(
-        data: bytes,
-        version: int,
-    ) -> tuple[int, int, int, int, int]:
         payload_start = 16 if version == 2 else 18
+        frame_length = payload_start + payload_length + CRC16_LENGTH
+        if len(data) < frame_length:
+            raise ValueError(f"Packet truncated: {data.hex()}")
+        frame = data[:frame_length]
+
+        if crc8(frame[:4]) != frame[4]:
+            raise ValueError(f"CRC8 mismatch: {frame.hex()}")
+        expected_crc16 = struct.unpack("<H", frame[-CRC16_LENGTH:])[0]
+        if crc16(frame[:-CRC16_LENGTH]) != expected_crc16:
+            raise ValueError(f"CRC16 mismatch: {frame.hex()}")
+
+        seq = frame[6:10]
+        src = frame[12]
+        dst = frame[13]
         if version == 2:
-            cmd_set, cmd_id = data[14:16]
-            return payload_start, 0, 0, cmd_set, cmd_id
-        dsrc, ddst, cmd_set, cmd_id = data[14:18]
-        return payload_start, dsrc, ddst, cmd_set, cmd_id
+            dsrc = ddst = 0
+            cmd_set, cmd_id = frame[14:16]
+        else:
+            dsrc, ddst, cmd_set, cmd_id = frame[14:18]
 
-    @staticmethod
-    def _extract_payload(data: bytes, payload_start: int, payload_length: int) -> bytes:
-        if payload_length == 0:
-            return b""
-        return data[payload_start : payload_start + payload_length]
+        payload = frame[payload_start : payload_start + payload_length]
+        if xor_payload and seq[0] != 0:
+            payload = bytes(byte ^ seq[0] for byte in payload)
 
-    @staticmethod
-    def _xor_payload(payload: bytes, xor_key: int) -> bytes:
-        return bytes(c ^ xor_key for c in payload)
+        return cls(src=src, dst=dst, cmd_set=cmd_set, cmd_id=cmd_id, payload=payload, dsrc=dsrc, ddst=ddst, version=version, seq=seq)
 
-
-_PREFIX_5A = b"\x5a\x5a"
+    @classmethod
+    def fromBytes(cls, data: bytes, xor_payload: bool = False) -> Packet:  # noqa: N802 - legacy adapter compatibility
+        """Compatibility wrapper around :meth:`from_bytes`."""
+        return cls.from_bytes(data, xor_payload=xor_payload)
 
 
 def encode_simple(payload: bytes) -> bytes:
-    """Wrap *payload* in an unencrypted 5A5A EncPacket (used during auth handshake).
-
-    Frame layout:
-        5A 5A  frame_type(1)  payload_type(1)  payload_len(2)  payload(N)  crc16(2)
-
-    The ``crc16`` is computed over everything from ``frame_type``
-    through end of payload.
-    """
-    frame_type = 0x11
-    payload_type = 0x01
-    inner = (
-        bytes([frame_type, payload_type])
-        + struct.pack(
-            "<H",
-            len(payload),
-        )
-        + payload
-    )
-    return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
+    """Wrap *payload* in an unencrypted ``5A5A`` frame for auth handshakes."""
+    inner = bytes([SIMPLE_FRAME_TYPE, DEFAULT_PAYLOAD_TYPE]) + struct.pack("<H", len(payload)) + payload
+    return ENC_PACKET_PREFIX + inner + struct.pack("<H", crc16(inner))
 
 
 def parse_simple(data: bytes) -> bytes | None:
-    """Extract the payload from an unencrypted 5A5A EncPacket.
+    """Extract a payload from an unencrypted ``5A5A`` frame.
 
-    Returns the raw payload bytes, or ``None`` when the frame is absent,
-    truncated, or its CRC does not match.
+    Returns ``None`` when the input contains no complete frame or the frame CRC
+    is invalid.  Leading garbage bytes are ignored, mirroring BLE notification
+    streams seen in the prototype.
     """
-    start = data.find(_PREFIX_5A)
+    start = data.find(ENC_PACKET_PREFIX)
     if start < 0:
         return None
     data = data[start:]
-    # Minimum: 5A5A(2) + frame_type(1) + payload_type(1) + payload_len(2) + crc16(2) = 8
     if len(data) < 8:
         return None
+
     payload_len = struct.unpack("<H", data[4:6])[0]
-    # inner spans from frame_type to end of payload (everything the CRC covers)
-    # inner = data[2 : 6 + payload_len]
-    # crc  = data[6 + payload_len : 6 + payload_len + 2]
-    inner_end = 6 + payload_len
-    if inner_end + 2 > len(data):
+    frame_end = 6 + payload_len + CRC16_LENGTH
+    if frame_end > len(data):
         return None
-    inner = data[2:inner_end]
-    crc_recv = struct.unpack("<H", data[inner_end : inner_end + 2])[0]
+
+    inner = data[2 : 6 + payload_len]
+    crc_recv = struct.unpack("<H", data[6 + payload_len : frame_end])[0]
     if crc16(inner) != crc_recv:
+        log.debug("Ignoring simple PowerStream frame with invalid CRC16")
         return None
-    return inner[4:]  # skip frame_type(1) + payload_type(1) + payload_len(2)
-
-
-class Type7Crypto:
-    def __init__(self) -> None:
-        self._private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP160r1)
-        self.public_key_bytes: bytes = self._private_key.get_verifying_key().to_string()
-        self._session_key: bytes | None = None
-        self._iv: bytes | None = None
-
-    def compute_shared_key(self, dev_pubkey_bytes: bytes) -> None:
-        dev_pub = ecdsa.VerifyingKey.from_string(
-            dev_pubkey_bytes,
-            curve=ecdsa.SECP160r1,
-        )
-        shared = ecdsa.ECDH(
-            ecdsa.SECP160r1,
-            self._private_key,
-            dev_pub,
-        ).generate_sharedsecret_bytes()
-        self._iv = hashlib.md5(shared, usedforsecurity=False).digest()
-        self._session_key = shared[:16]
-        log.debug("Type7: shared key established, iv=%s", self._iv.hex())
-
-    def process_key_info(self, encrypted_data: bytes) -> None:
-        # Guards sicherstellen bevor wir entschlüsseln
-        self._require_session_key()
-        self._require_iv()
-        raw = self.decrypt_raw(encrypted_data)
-        s_rand = raw[:16]
-        seed = raw[16:18]
-        self._session_key = self._gen_session_key(seed, s_rand)
-        log.debug("Type7: session key updated")
-
-    def _gen_session_key(self, seed: bytes, s_rand: bytes) -> bytes:
-        cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        decrypted = unpad(
-            cipher.decrypt(pad(s_rand + seed + bytes(14), AES.block_size)),
-            AES.block_size,
-        )
-        return bytes(decrypted[:16])
-
-    def _require_session_key(self) -> bytes:
-        if self._session_key is None:
-            msg = "Session key not initialized"
-            raise ValueError(msg)
-        return self._session_key
-
-    def _require_iv(self) -> bytes:
-        if self._iv is None:
-            msg = "IV not initialized"
-            raise ValueError(msg)
-        return self._iv
-
-    def encrypt(self, data: bytes) -> bytes:
-        cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return bytes(cipher.encrypt(pad(data, AES.block_size)))
-
-    def decrypt(self, data: bytes) -> bytes:
-        cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return bytes(unpad(cipher.decrypt(data), AES.block_size))
-
-    def decrypt_raw(self, data: bytes) -> bytes:
-        cipher = AES.new(self._require_session_key(), AES.MODE_CBC, self._require_iv())
-        return bytes(cipher.decrypt(data))
-
-    def encode_packet(self, packet: Packet) -> bytes:
-        raw = packet.toBytes()
-        encrypted = self.encrypt(raw)
-        frame_type = 0x10
-        payload_type = 0x01
-        inner = bytes([frame_type, payload_type]) + struct.pack("<H", len(encrypted)) + encrypted
-        return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
-
-    def decode_packets(self, data: bytes) -> list[Packet]:
-        """Decrypt and parse all complete EncPackets found in *data*.
-
-        Frame layout (mirrors encode_packet):
-            5A 5A frame_type(1) payload_type(1)
-            inner_len(2) encrypted(inner_len) crc16(2)
-
-        ``inner_len`` = length of the encrypted payload only.
-        The CRC covers everything from ``frame_type`` through end of ``encrypted``.
-        """
-        packets: list[Packet] = []
-        while data:
-            start = data.find(_PREFIX_5A)
-            if start < 0:
-                break
-            if start > 0:
-                data = data[start:]
-            # Minimum frame: 5A5A(2) + frame_type(1) +
-            # payload_type(1) + inner_len(2) + crc16(2) = 8
-            if len(data) < 8:
-                break
-            encrypted_len = struct.unpack("<H", data[4:6])[0]
-            # Total frame size: prefix(2) + 4-byte sub-header + encrypted + crc(2)
-            frame_end = 6 + encrypted_len + 2
-            if frame_end > len(data):
-                break
-            # CRC covers sub-header + encrypted payload
-            # (everything between prefix and CRC)
-            inner = data[2 : 6 + encrypted_len]
-            crc_recv = struct.unpack("<H", data[6 + encrypted_len : frame_end])[0]
-            data = data[frame_end:]
-            if crc16(inner) != crc_recv:
-                log.debug("Type7: CRC-Fehler, Paket übersprungen")
-                continue
-            payload_enc = inner[4:]
-            # skip frame_type(1) + payload_type(1) + inner_len(2)
-            try:
-                decrypted = self.decrypt(payload_enc)
-                packets.append(Packet.fromBytes(decrypted))
-            except Exception as e:
-                log.warning("Type7 decode error (%s): %s", type(e).__name__, e)
-        return packets
-
-    @property
-    def is_ready(self) -> bool:
-        return self._session_key is not None
-
-
-_EF_PUBKEY_TYPE1 = ECC.import_key(
-    "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEAjyDKgWi1v2IO417ZsQC3VIa5U6bs8TzQQGxzlvCKWkM=\n-----END PUBLIC KEY-----",
-)
+    return inner[4:]
 
 
 class Type1Crypto:
+    """PowerStream Type1 AES-CBC transport keyed by device serial number."""
+
+    block_size = AES.block_size
+
     def __init__(self, dev_sn: str) -> None:
-        key = hashlib.md5(dev_sn.encode(), usedforsecurity=False).digest()
-        iv = hashlib.md5(dev_sn[::-1].encode(), usedforsecurity=False).digest()
-        self._key = key
-        self._iv = iv
+        if not dev_sn:
+            msg = "PowerStream serial number must not be empty"
+            raise ValueError(msg)
+        self._dev_sn = dev_sn
+        self._key = hashlib.md5(dev_sn.encode(), usedforsecurity=False).digest()
+        self._iv = hashlib.md5(dev_sn[::-1].encode(), usedforsecurity=False).digest()
+        log.debug("Initialized Type1Crypto for PowerStream serial ending in %s", dev_sn[-4:])
 
     def encrypt(self, data: bytes) -> bytes:
-        padded_len = (len(data) + 15) // 16 * 16
-        padded = data + b"\x00" * (padded_len - len(data))
+        """Encrypt *data* using AES-CBC with null padding."""
+        padded_len = ((len(data) + self.block_size - 1) // self.block_size) * self.block_size
+        padded = data.ljust(padded_len, b"\x00")
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
         return bytes(cipher.encrypt(padded))
 
     def decrypt(self, data: bytes) -> bytes:
+        """Decrypt *data* using AES-CBC without stripping null padding."""
+        if len(data) % self.block_size != 0:
+            msg = "Encrypted Type1 payload length must be a multiple of AES block size"
+            raise ValueError(msg)
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
         return bytes(cipher.decrypt(data))
 
     def encode_packet(self, packet: Packet) -> bytes:
-        raw = packet.toBytes()
-        return raw[:5] + self.encrypt(raw[5:])
+        """Serialize and encrypt a packet for the PowerStream write characteristic."""
+        raw = packet.to_bytes()
+        return raw[:HEADER_LENGTH] + self.encrypt(raw[HEADER_LENGTH:])
 
-    def decode_packets(
-        self,
-        data: bytes,
-        buffer: bytearray,
-    ) -> tuple[list[Packet], bytearray]:
+    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[Packet], bytearray]:
+        """Decode all complete Type1 packets from a BLE notification chunk.
+
+        Incomplete trailing data is returned as the next buffer.  Invalid frames
+        are skipped with debug/warning logs rather than aborting the stream.
+        """
         data = bytes(buffer) + data
         buffer = bytearray()
         packets: list[Packet] = []
+
         while data:
-            start = data.find(Packet.PREFIX)
+            start = data.find(PACKET_PREFIX)
             if start < 0:
+                log.debug("Dropping %d bytes before PowerStream packet prefix", len(data))
                 break
             if start > 0:
+                log.debug("Skipping %d garbage bytes before PowerStream packet", start)
                 data = data[start:]
-            if len(data) < 5:
+
+            if len(data) < HEADER_LENGTH:
                 buffer = bytearray(data)
                 break
             if crc8(data[:4]) != data[4]:
+                log.debug("Skipping byte after invalid Type1 header CRC8")
                 data = data[1:]
                 continue
+
             payload_length = struct.unpack("<H", data[2:4])[0]
             version = data[1]
-            inner_len = (15 if version >= 3 else 13) + payload_length
-            frame_len = 5 + ((inner_len + 15) // 16 * 16)
+            body_len = (15 if version >= 3 else 13) + payload_length
+            encrypted_len = ((body_len + self.block_size - 1) // self.block_size) * self.block_size
+            frame_len = HEADER_LENGTH + encrypted_len
             if len(data) < frame_len:
                 buffer = bytearray(data)
                 break
-            header = data[:5]
-            encrypted_body = data[5:frame_len]
+
+            header = data[:HEADER_LENGTH]
+            encrypted_body = data[HEADER_LENGTH:frame_len]
             data = data[frame_len:]
             try:
                 decrypted = self.decrypt(encrypted_body)
-                packets.append(
-                    Packet.fromBytes(header + decrypted[:inner_len], xor_payload=True),
-                )
-            except Exception as e:
-                log.warning("Type1 decode error (%s): %s", type(e).__name__, e)
+                packets.append(Packet.from_bytes(header + decrypted[:body_len], xor_payload=True))
+            except Exception as exc:
+                log.warning("Type1 decode error (%s): %s", type(exc).__name__, exc)
+
         return packets, buffer
 
     @property
     def is_ready(self) -> bool:
+        """Type1 is ready immediately after serial-derived key initialization."""
         return True
 
 
 def build_auth_md5(user_id: str, dev_sn: str) -> bytes:
-    md5_data = hashlib.md5(
-        (user_id + dev_sn).encode("ASCII"),
-        usedforsecurity=False,
-    ).digest()
-    return ("".join(f"{c:02X}" for c in md5_data)).encode("ASCII")
+    """Return ``MD5(user_id + serial)`` as uppercase ASCII hex bytes."""
+    md5_data = hashlib.md5((user_id + dev_sn).encode("ASCII"), usedforsecurity=False).digest()
+    return md5_data.hex().upper().encode("ASCII")
