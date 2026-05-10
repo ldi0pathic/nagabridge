@@ -1,10 +1,34 @@
+"""
+Tests for nagabridge.adapters.powerstream.protocol.
+
+Real crypto libraries (ecdsa, crc, pycryptodome) are used when installed.
+Lightweight pure-Python stubs are injected as a fallback so the structural
+tests (framing, CRC routing, state guards) can run in minimal CI environments
+that do not carry the native dependencies.
+
+Tests that rely on actual encryption correctness (e.g. "two different keys
+produce different ciphertexts") are skipped automatically when the stubs are
+active, because the stub AES is intentionally an identity function.
+"""
+
 import struct
 import sys
 import types
 
 import pytest
 
-if "ecdsa" not in sys.modules:
+# ---------------------------------------------------------------------------
+# Dependency stubs (fallback for minimal CI environments)
+# ---------------------------------------------------------------------------
+# We use try/except rather than `if X not in sys.modules` so that installed
+# libraries are always preferred — the sys.modules check fires at collection
+# time before any real import has happened and would always inject the stub.
+
+_USING_REAL_ECDSA = True
+try:
+    import ecdsa as _ecdsa_check  # noqa: F401
+except ImportError:
+    _USING_REAL_ECDSA = False
     ecdsa_stub = types.ModuleType("ecdsa")
 
     class _DummyVerifyingKey:
@@ -13,14 +37,11 @@ if "ecdsa" not in sys.modules:
 
         @staticmethod
         def from_string(data: bytes, curve: object = None) -> "_DummyVerifyingKey":
-            _ = data
-            _ = curve
             return _DummyVerifyingKey()
 
     class _DummySigningKey:
         @staticmethod
         def generate(curve: object = None) -> "_DummySigningKey":
-            _ = curve
             return _DummySigningKey()
 
         def get_verifying_key(self) -> _DummyVerifyingKey:
@@ -28,9 +49,7 @@ if "ecdsa" not in sys.modules:
 
     class _DummyECDH:
         def __init__(self, curve: object, priv: object, pub: object) -> None:
-            _ = curve
-            _ = priv
-            _ = pub
+            pass
 
         def generate_sharedsecret_bytes(self) -> bytes:
             return b"\x02" * 20
@@ -41,7 +60,11 @@ if "ecdsa" not in sys.modules:
     ecdsa_stub.ECDH = _DummyECDH
     sys.modules["ecdsa"] = ecdsa_stub
 
-if "crc" not in sys.modules:
+_USING_REAL_CRC = True
+try:
+    import crc as _crc_check  # noqa: F401
+except ImportError:
+    _USING_REAL_CRC = False
     crc_stub = types.ModuleType("crc")
 
     class _DummyConfig:
@@ -49,7 +72,7 @@ if "crc" not in sys.modules:
             self.width = int(kwargs.get("width", 8))
 
     class _DummyCalculator:
-        def __init__(self, config: _DummyConfig) -> None:
+        def __init__(self, config: "_DummyConfig") -> None:
             self._mask = (1 << config.width) - 1
 
         def checksum(self, data: bytes) -> int:
@@ -59,7 +82,11 @@ if "crc" not in sys.modules:
     crc_stub.Calculator = _DummyCalculator
     sys.modules["crc"] = crc_stub
 
-if "Crypto" not in sys.modules:
+_USING_REAL_CRYPTO = True
+try:
+    from Crypto.Cipher import AES as _aes_check  # noqa: F401
+except ImportError:
+    _USING_REAL_CRYPTO = False
     crypto_pkg = types.ModuleType("Crypto")
     cipher_mod = types.ModuleType("Crypto.Cipher")
     publickey_mod = types.ModuleType("Crypto.PublicKey")
@@ -68,9 +95,7 @@ if "Crypto" not in sys.modules:
 
     class _DummyAESCipher:
         def __init__(self, key: bytes, mode: int, iv: bytes) -> None:
-            _ = key
-            _ = mode
-            _ = iv
+            pass
 
         def encrypt(self, data: bytes) -> bytes:
             return data
@@ -83,13 +108,12 @@ if "Crypto" not in sys.modules:
         block_size = 16
 
         @staticmethod
-        def new(key: bytes, mode: int, iv: bytes) -> _DummyAESCipher:
+        def new(key: bytes, mode: int, iv: bytes) -> "_DummyAESCipher":
             return _DummyAESCipher(key, mode, iv)
 
     class _DummyECC:
         @staticmethod
         def import_key(key: str) -> object:
-            _ = key
             return object()
 
     def _pad(data: bytes, block_size: int) -> bytes:
@@ -97,7 +121,6 @@ if "Crypto" not in sys.modules:
         return data + bytes([pad_len]) * pad_len
 
     def _unpad(data: bytes, block_size: int) -> bytes:
-        _ = block_size
         return data[: -data[-1]]
 
     cipher_mod.AES = _DummyAES
@@ -111,6 +134,12 @@ if "Crypto" not in sys.modules:
     sys.modules["Crypto.PublicKey"] = publickey_mod
     sys.modules["Crypto.Util"] = util_mod
     sys.modules["Crypto.Util.Padding"] = padding_mod
+
+# Marker used to skip tests that require real crypto (not meaningful with stubs)
+_needs_real_crypto = pytest.mark.skipif(
+    not (_USING_REAL_CRYPTO and _USING_REAL_ECDSA and _USING_REAL_CRC),
+    reason="Requires real ecdsa / pycryptodome / crc libraries",
+)
 
 from nagabridge.adapters.powerstream.protocol import (
     Packet,
@@ -218,9 +247,7 @@ def test_packet_xor_payload_roundtrip():
 def test_packet_xor_payload_skipped_when_seq0_is_zero():
     """Xor_payload=True darf bei seq[0]==0 nichts verändern."""
     payload = bytes([0xAA, 0xBB])
-    pkt = Packet(
-        src=1, dst=2, cmd_set=1, cmd_id=1, payload=payload, seq=b"\x00\x00\x00\x00"
-    )
+    pkt = Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=payload, seq=b"\x00\x00\x00\x00")
     raw = pkt.toBytes()
     parsed = Packet.fromBytes(raw, xor_payload=True)
     assert parsed.payload == payload
@@ -306,15 +333,27 @@ def test_parse_simple_ignores_leading_garbage():
 # =============================================================================
 
 
+def _make_type7_pair() -> tuple["Type7Crypto", "Type7Crypto"]:
+    """Return two Type7Crypto instances that have completed a mutual key exchange."""
+
+    alice = Type7Crypto()
+    bob = Type7Crypto()
+    # Bob receives Alice's public key and vice versa — both derive the same shared secret.
+    bob.compute_shared_key(alice.public_key_bytes)
+    alice.compute_shared_key(bob.public_key_bytes)
+    return alice, bob
+
+
 def test_type7_not_ready_before_key_exchange():
     crypto = Type7Crypto()
     assert not crypto.is_ready
 
 
+@_needs_real_crypto
 def test_type7_ready_after_compute_shared_key():
-    crypto = Type7Crypto()
-    crypto.compute_shared_key(b"\x03" * 40)
-    assert crypto.is_ready
+    """is_ready becomes True once a valid key exchange has been completed."""
+    alice, _ = _make_type7_pair()
+    assert alice.is_ready
 
 
 def test_type7_requires_session_key_before_encrypt():
@@ -337,26 +376,22 @@ def test_type7_requires_initialization_before_decrypt_raw():
 
 
 def test_type7_process_key_info_requires_initialization():
-    """Process_key_info ohne Init muss ValueError werfen."""
+    """process_key_info without prior key exchange must raise ValueError."""
     crypto = Type7Crypto()
     with pytest.raises(ValueError, match="Session key not initialized"):
         crypto.process_key_info(b"\x00" * 32)
 
 
+@_needs_real_crypto
 def test_type7_encode_decode_packet_roundtrip():
-    crypto = Type7Crypto()
-    crypto._session_key = b"1" * 16  # type: ignore[attr-defined]
-    crypto._iv = b"2" * 16  # type: ignore[attr-defined]
+    """encode_packet / decode_packets must survive a real AES round-trip."""
+    alice, bob = _make_type7_pair()
 
-    pkt = Packet(
-        src=10, dst=20, dsrc=1, ddst=1, cmd_set=2, cmd_id=3, payload=b"payload"
-    )
-    frame = crypto.encode_packet(pkt)
+    pkt = Packet(src=10, dst=20, dsrc=1, ddst=1, cmd_set=2, cmd_id=3, payload=b"payload")
+    frame = alice.encode_packet(pkt)
 
     assert frame.startswith(_PREFIX_5A)
-    # Stub-AES ist identity → decode sollte Paket wiederherstellen
-    decoded = crypto.decode_packets(frame)
-    assert isinstance(decoded, list)
+    decoded = alice.decode_packets(frame)
     assert len(decoded) == 1
     assert decoded[0].src == 10
     assert decoded[0].cmdSet == 2
@@ -367,10 +402,8 @@ def test_type7_decode_packets_skips_bad_crc():
     crypto._session_key = b"1" * 16  # type: ignore[attr-defined]
     crypto._iv = b"2" * 16  # type: ignore[attr-defined]
 
-    frame = bytearray(
-        crypto.encode_packet(Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=b"x"))
-    )
-    frame[-3] ^= 0xFF  # CRC des äußeren Frames kaputtmachen
+    frame = bytearray(crypto.encode_packet(Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=b"x")))
+    frame[-3] ^= 0xFF  # corrupt the outer frame CRC
     result = crypto.decode_packets(bytes(frame))
     assert result == []
 
@@ -382,16 +415,14 @@ def test_type7_decode_packets_empty_input():
     assert crypto.decode_packets(b"") == []
 
 
+@_needs_real_crypto
 def test_type7_decode_packets_ignores_leading_garbage():
-    crypto = Type7Crypto()
-    crypto._session_key = b"1" * 16  # type: ignore[attr-defined]
-    crypto._iv = b"2" * 16  # type: ignore[attr-defined]
+    """Bytes before the 5A5A prefix must be silently skipped."""
+    alice, _ = _make_type7_pair()
 
-    frame = crypto.encode_packet(
-        Packet(src=5, dst=6, cmd_set=3, cmd_id=4, payload=b"hi")
-    )
+    frame = alice.encode_packet(Packet(src=5, dst=6, cmd_set=3, cmd_id=4, payload=b"hi"))
     garbage = b"\xde\xad\xbe\xef" + frame
-    decoded = crypto.decode_packets(garbage)
+    decoded = alice.decode_packets(garbage)
     assert len(decoded) == 1
     assert decoded[0].src == 5
 
@@ -478,6 +509,7 @@ def test_type1_empty_input_returns_empty():
     assert buffer == bytearray()
 
 
+@_needs_real_crypto
 def test_type1_different_serials_produce_different_keys():
     c1 = Type1Crypto("SN-AAA")
     c2 = Type1Crypto("SN-BBB")

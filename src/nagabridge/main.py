@@ -159,8 +159,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if ensure_default_config(args.config):
         sys.stderr.write(
-            "Config neu angelegt: "
-            f"{args.config}. Bitte Werte prüfen und erneut starten.\n",
+            f"Config neu angelegt: {args.config}. Bitte Werte prüfen und erneut starten.\n",
         )
         return EXIT_CONFIG_ACTION_REQUIRED
 
