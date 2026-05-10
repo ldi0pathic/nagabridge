@@ -1,7 +1,7 @@
 # PowerStream Integration – Status
 
 **Stand:** 10.05.2026  
-**Aktueller Fortschritt:** 3 von 7 Schritte
+**Aktueller Fortschritt:** 4 von 7 Schritte
 
 ## ✅ Erledigt
 
@@ -23,14 +23,17 @@
   - PowerStream-Protobuf-Wire-Parser für Inverter-Heartbeat, PowerPack und HeaderMessage ergänzt.
   - Wichtige Inverterwerte in snake_case ausgegeben und unbekannte/malformed Payloads mit Hex-Dump geloggt.
   - Unit Tests in `tests/adapters/powerstream/test_parser.py` ergänzt.
+- [x] Schritt 3: BLE-Abstraktion
+  - `src/nagabridge/core/ble/` mit Client-Protokoll, bleak-Adapter, Exceptions und `BleConnection` angelegt.
+  - Reconnect mit Backoff, Notification-Normalisierung, Schreiboperationen und sauberes Disconnect-Handling implementiert.
+  - Unit Tests in `tests/core/ble/test_connection.py` ergänzt.
 
 ## 🔄 In Bearbeitung
 
-- Keine aktiven Arbeiten; Schritt 3 ist der nächste geplante Schritt.
+- Keine aktiven Arbeiten; Schritt 4 ist der nächste geplante Schritt.
 
 ## ⏳ Offene Schritte
 
-- [ ] Schritt 3: BLE-Abstraktion
 - [ ] Schritt 4: Adapter Kern
 - [ ] Schritt 5: Konfiguration & Integration
 - [ ] Schritt 6: Dokumentation
@@ -42,7 +45,7 @@
 
 ## Nächste Session-Ziele
 
-1. Schritt 3 starten: wiederverwendbare BLE-Abstraktion entwerfen und testen.
+1. Schritt 4 starten: PowerStream-Adapter-Kern auf Config, Type1Crypto, Parser und BleConnection aufbauen.
 2. Echte Payload-Fixtures ergänzen, sobald Captures verfügbar sind.
 
 ---
