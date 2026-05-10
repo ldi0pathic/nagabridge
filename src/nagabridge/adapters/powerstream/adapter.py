@@ -27,7 +27,7 @@ UUID_WRITE = "00000002-0000-1000-8000-00805f9b34fb"
 UUID_NOTIFY = "00000003-0000-1000-8000-00805f9b34fb"
 STATE_TOPIC = "ecoflow/powerstream/state"
 COMMAND_TOPIC = "ecoflow/powerstream/command"
-DEFAULT_POLL_INTERVAL_SECONDS = 30.0
+DEFAULT_POLL_INTERVAL_SECONDS = 10.0
 MAX_LOAD_POWER_WATTS = 8000
 
 ConnectionFactory = Callable[[BleConnectionConfig], BleConnection]
@@ -105,6 +105,7 @@ class PowerstreamAdapter(Adapter):
         self._connection: BleConnection | None = None
         self._crypto: _PowerstreamCrypto | None = None
         self._rx_buffer = bytearray()
+        self._authenticated = False
         self._poll_task: asyncio.Task[None] | None = None
 
     @property
@@ -201,9 +202,12 @@ class PowerstreamAdapter(Adapter):
             self._health = HealthStatus(online=False, detail=f"notification failed: {exc}")
 
     async def _publish_state(self, payload: Payload) -> None:
+        """Publish a minimal ADR-002 state payload on the configured state topic."""
         if self._bus is None:
             return
-        await self._bus.publish(self._config.state_topic, payload)
+        if not self._config.state_topic.endswith("/state"):
+            log.warning("PowerStream state topic should end with /state: %s", self._config.state_topic)
+        await self._bus.publish(self._config.state_topic, dict(payload))
 
     async def _poll_loop(self) -> None:
         while True:
@@ -215,14 +219,26 @@ class PowerstreamAdapter(Adapter):
                 self._health = HealthStatus(online=False, detail=f"poll failed: {exc}")
 
     async def _authenticate(self) -> None:
-        if not self._config.user_id or not self._config.serial_number:
+        """Send the PowerStream MD5 authentication packet when credentials exist."""
+        self._authenticated = False
+        if not self._config.serial_number:
             return
+        if not self._config.user_id:
+            log.info("PowerStream %s has no user_id configured; authentication is skipped", self.name)
+            return
+
         try:
             from .protocol import build_auth_md5
 
             auth_payload = build_auth_md5(self._config.user_id, self._config.serial_number)
+            if len(auth_payload) != 32:
+                msg = "PowerStream auth MD5 payload must be 32 ASCII bytes"
+                raise ValueError(msg)
             await self._write_packet(0x01, 0x20, auth_payload)
-        except Exception:
+            self._authenticated = True
+            log.info("PowerStream %s authentication packet sent", self.name)
+        except Exception as exc:
+            self._health = HealthStatus(online=False, detail=f"auth failed: {exc}")
             log.exception("PowerStream authentication failed for %s", self.name)
             raise
 
@@ -243,11 +259,24 @@ class PowerstreamAdapter(Adapter):
         return self._crypto.encode_packet(packet)
 
     def _initialize_crypto(self) -> None:
+        """Initialize PowerStream Type1 crypto from the serial number.
+
+        Type1 uses the device serial number for AES key/IV derivation. The
+        EcoFlow user ID is not part of the AES key; it is combined with the
+        same serial number in :meth:`_authenticate` to build the MD5 handshake
+        payload.
+        """
         if self._crypto is not None:
             return
         if self._config.serial_number is None:
             return
         self._crypto = self._crypto_factory(self._config.serial_number)
+        log.debug(
+            "Initialized PowerStream Type1Crypto for %s (serial ending in %s, user_id configured=%s)",
+            self.name,
+            self._config.serial_number[-4:],
+            self._config.user_id is not None,
+        )
 
     def _connection_config(self) -> BleConnectionConfig:
         return BleConnectionConfig(

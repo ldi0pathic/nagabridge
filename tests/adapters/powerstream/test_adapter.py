@@ -244,3 +244,69 @@ def test_adapter_config_from_ble_device_uses_powerstream_specific_fields() -> No
     assert config.reconnect_attempts == 5
     assert config.reconnect_backoff_seconds == 0.25
     assert config.write_with_response is True
+
+
+def test_authentication_skips_when_user_id_is_missing() -> None:
+    async def scenario() -> None:
+        connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
+        crypto = FakeCrypto("SN123")
+        adapter = PowerstreamAdapter(_config(user_id=None), connection_factory=lambda _cfg: connection, crypto_factory=lambda _serial: crypto)  # type: ignore[arg-type]
+
+        await adapter.start(EventBus())
+
+        assert adapter._authenticated is False  # type: ignore[attr-defined]
+        assert connection.writes == []
+
+        await adapter.stop()
+
+    asyncio.run(scenario())
+
+
+def test_authentication_failure_sets_health_and_raises() -> None:
+    class FailingCrypto(FakeCrypto):
+        def encode_packet(self, packet: object) -> bytes:
+            raise RuntimeError("encode failed")
+
+    async def scenario() -> None:
+        connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
+        adapter = PowerstreamAdapter(
+            _config(user_id="user"),
+            connection_factory=lambda _cfg: connection,
+            crypto_factory=lambda _serial: FailingCrypto("SN123"),
+        )  # type: ignore[arg-type]
+
+        try:
+            await adapter.start(EventBus())
+        except RuntimeError as exc:
+            assert "encode failed" in str(exc)
+        else:  # pragma: no cover - defensive assertion branch
+            raise AssertionError("authentication failure should propagate")
+
+        assert adapter.health.online is False
+        assert "start failed" in adapter.health.detail
+        assert connection.disconnected
+
+    asyncio.run(scenario())
+
+
+def test_publish_state_copies_minimal_adr002_payload() -> None:
+    async def scenario() -> None:
+        bus = EventBus()
+        adapter = PowerstreamAdapter(_config(serial_number=None))
+        received: list[dict[str, object]] = []
+
+        async def handler(_topic: str, payload: dict[str, object]) -> None:
+            received.append(payload)
+
+        await bus.subscribe("ecoflow/powerstream/state", handler)
+        await adapter.start(bus)
+        original = {"power": 120, "battery": 80}
+        await adapter._publish_state(original)  # type: ignore[arg-type]
+        original["power"] = 999
+        await asyncio.sleep(0)
+
+        assert received == [{"power": 120, "battery": 80}]
+
+        await adapter.stop()
+
+    asyncio.run(scenario())

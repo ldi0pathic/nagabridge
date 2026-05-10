@@ -1,7 +1,7 @@
 # PowerStream Integration – Status
 
 **Stand:** 10.05.2026  
-**Aktueller Fortschritt:** 6 von 7 Schritte
+**Aktueller Fortschritt:** 7 von 7 Schritte
 
 ## ✅ Erledigt
 
@@ -37,23 +37,29 @@
   - Adapter-Factory überträgt die erweiterten BLE-Config-Werte in `PowerstreamAdapterConfig`.
   - Default-Konfigurationsvorlage um PowerStream-Beispielfelder ergänzt.
   - Config-/Factory-Tests ergänzt.
+- [x] Schritt 6: Dokumentation & Final Polish
+  - `docs/devices/powerstream.md` mit Konfiguration, Topics, Commands und Auth-Flow erstellt.
+  - Polling-Default auf 10 Sekunden gesetzt und im Config-Template dokumentiert.
+  - Auth-Flow robuster dokumentiert/implementiert (`MD5(user_id + serial_number)`), Crypto-Initialisierung klarer beschrieben und ADR-002-State-Publishing abgesichert.
+  - Zusätzliche Adaptertests für Auth-Skip, Auth-Fehler und State-Payload-Kopie ergänzt.
 
 ## 🔄 In Bearbeitung
 
-- Keine aktiven Arbeiten; Schritt 6 ist der nächste geplante Schritt.
+- Keine aktiven Arbeiten.
 
 ## ⏳ Offene Schritte
 
-- [ ] Schritt 6: Dokumentation
+- Keine offenen Integrationsschritte im Plan.
 
 ## Bemerkungen / Blockers
 
 - Direkter Zugriff auf `https://github.com/ldi0pathic/ecoflow-ble-mqtt.git` per `git clone` und Raw-URL war in dieser Umgebung durch `CONNECT tunnel failed, response 403` blockiert. Die öffentlich sichtbaren GitHub-Webseiten wurden als Referenz geprüft.
 - Für spätere Parser-Arbeiten werden echte PowerStream-BLE-Captures als Fixture-Dateien benötigt.
+- Manuelle Tests mit echtem PowerStream-Gerät stehen in dieser Umgebung noch aus.
 
 ## Nächste Session-Ziele
 
-1. Schritt 6 starten: PowerStream-Dokumentation und finalen Qualitätscheck ergänzen.
+1. Manuelle Tests am echten PowerStream durchführen.
 2. Echte Payload-Fixtures ergänzen, sobald Captures verfügbar sind.
 
 ---
