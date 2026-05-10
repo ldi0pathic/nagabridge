@@ -247,9 +247,7 @@ def test_packet_xor_payload_roundtrip():
 def test_packet_xor_payload_skipped_when_seq0_is_zero():
     """Xor_payload=True darf bei seq[0]==0 nichts verändern."""
     payload = bytes([0xAA, 0xBB])
-    pkt = Packet(
-        src=1, dst=2, cmd_set=1, cmd_id=1, payload=payload, seq=b"\x00\x00\x00\x00"
-    )
+    pkt = Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=payload, seq=b"\x00\x00\x00\x00")
     raw = pkt.toBytes()
     parsed = Packet.fromBytes(raw, xor_payload=True)
     assert parsed.payload == payload
@@ -404,9 +402,7 @@ def test_type7_decode_packets_skips_bad_crc():
     crypto._session_key = b"1" * 16  # type: ignore[attr-defined]
     crypto._iv = b"2" * 16  # type: ignore[attr-defined]
 
-    frame = bytearray(
-        crypto.encode_packet(Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=b"x"))
-    )
+    frame = bytearray(crypto.encode_packet(Packet(src=1, dst=2, cmd_set=1, cmd_id=1, payload=b"x")))
     frame[-3] ^= 0xFF  # corrupt the outer frame CRC
     result = crypto.decode_packets(bytes(frame))
     assert result == []

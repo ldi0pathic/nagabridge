@@ -193,9 +193,14 @@ def encode_simple(payload: bytes) -> bytes:
     """
     frame_type = 0x11
     payload_type = 0x01
-    inner = bytes(
-            [frame_type, payload_type]) + struct.pack("<H", len(payload),
-            ) + payload
+    inner = (
+        bytes([frame_type, payload_type])
+        + struct.pack(
+            "<H",
+            len(payload),
+        )
+        + payload
+    )
     return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
 
@@ -294,11 +299,7 @@ class Type7Crypto:
         encrypted = self.encrypt(raw)
         frame_type = 0x10
         payload_type = 0x01
-        inner = (
-            bytes([frame_type, payload_type])
-            + struct.pack("<H", len(encrypted))
-            + encrypted
-        )
+        inner = bytes([frame_type, payload_type]) + struct.pack("<H", len(encrypted)) + encrypted
         return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
     def decode_packets(self, data: bytes) -> list[Packet]:
@@ -350,9 +351,7 @@ class Type7Crypto:
 
 
 _EF_PUBKEY_TYPE1 = ECC.import_key(
-    "-----BEGIN PUBLIC KEY-----\n"
-    "MCowBQYDK2VuAyEAjyDKgWi1v2IO417ZsQC3VIa5U6bs8TzQQGxzlvCKWkM=\n"
-    "-----END PUBLIC KEY-----",
+    "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEAjyDKgWi1v2IO417ZsQC3VIa5U6bs8TzQQGxzlvCKWkM=\n-----END PUBLIC KEY-----",
 )
 
 
