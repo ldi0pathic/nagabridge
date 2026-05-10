@@ -1,7 +1,7 @@
 # PowerStream Integration – Status
 
 **Stand:** 10.05.2026  
-**Aktueller Fortschritt:** 5 von 7 Schritte
+**Aktueller Fortschritt:** 6 von 7 Schritte
 
 ## ✅ Erledigt
 
@@ -31,14 +31,19 @@
   - PowerStream-Adapter-Kern mit Config-Handling, BLE-Connection, Parser-Anbindung, Notification-Handler und Command-Methoden implementiert.
   - Type1Crypto wird bei vorhandener Seriennummer lazy initialisiert; bestehende generische BLE-Config bleibt bis Schritt 5 kompatibel.
   - Unit Tests in `tests/adapters/powerstream/test_adapter.py` ergänzt.
+  - Nacharbeit: `_crypto` typisiert, Type1Crypto-Initialisierung/Encoding-Happy-Path getestet und Auth-/Notification-/Polling-Fehlerbehandlung geschärft.
+- [x] Schritt 5: Konfiguration & Integration
+  - Config-Schema um PowerStream-spezifische Felder (`serial_number`, `user_id`, Polling, Reconnect, Write-Response) erweitert.
+  - Adapter-Factory überträgt die erweiterten BLE-Config-Werte in `PowerstreamAdapterConfig`.
+  - Default-Konfigurationsvorlage um PowerStream-Beispielfelder ergänzt.
+  - Config-/Factory-Tests ergänzt.
 
 ## 🔄 In Bearbeitung
 
-- Keine aktiven Arbeiten; Schritt 5 ist der nächste geplante Schritt.
+- Keine aktiven Arbeiten; Schritt 6 ist der nächste geplante Schritt.
 
 ## ⏳ Offene Schritte
 
-- [ ] Schritt 5: Konfiguration & Integration
 - [ ] Schritt 6: Dokumentation
 
 ## Bemerkungen / Blockers
@@ -48,7 +53,7 @@
 
 ## Nächste Session-Ziele
 
-1. Schritt 5 starten: Konfigurationsschema um PowerStream-spezifische Felder erweitern und Adapter-Factory verdrahten.
+1. Schritt 6 starten: PowerStream-Dokumentation und finalen Qualitätscheck ergänzen.
 2. Echte Payload-Fixtures ergänzen, sobald Captures verfügbar sind.
 
 ---

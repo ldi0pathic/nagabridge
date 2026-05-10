@@ -4,10 +4,42 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter, PowerstreamAdapterConfig
 from nagabridge.core.ble import BleConnectionConfig
 from nagabridge.core.bus import EventBus
+
+
+@dataclass(slots=True)
+class FakePacket:
+    """Decoded packet fixture returned by fake crypto."""
+
+    src: int
+    dst: int
+    cmd_set: int
+    cmd_id: int
+    payload: bytes
+
+
+class FakeCrypto:
+    """Type1Crypto-compatible fake used by adapter tests."""
+
+    def __init__(self, serial_number: str) -> None:
+        self.serial_number = serial_number
+        self.encoded_packets: list[Any] = []
+        self.decoded_packets: list[FakePacket] = []
+
+    def encode_packet(self, packet: Any) -> bytes:
+        self.encoded_packets.append(packet)
+        return bytes([packet.cmd_set, packet.cmd_id]) + packet.payload
+
+    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[FakePacket], bytearray]:
+        assert buffer == bytearray()
+        if data == b"status":
+            return self.decoded_packets, bytearray()
+        return [], bytearray(data)
 
 
 class FakeConnection:
@@ -51,29 +83,32 @@ def _config(**overrides: object) -> PowerstreamAdapterConfig:
     return PowerstreamAdapterConfig(**values)  # type: ignore[arg-type]
 
 
-def _packet_encoder(cmd_set: int, cmd_id: int, payload: bytes) -> bytes:
-    return bytes([cmd_set, cmd_id]) + payload
-
-
-def test_start_connects_ble_and_subscribes_to_command_topic() -> None:
+def test_start_connects_ble_subscribes_and_initializes_crypto() -> None:
     async def scenario() -> None:
-        created: list[FakeConnection] = []
+        created_connections: list[FakeConnection] = []
+        created_crypto: list[FakeCrypto] = []
 
-        def factory(config: BleConnectionConfig) -> FakeConnection:
+        def connection_factory(config: BleConnectionConfig) -> FakeConnection:
             connection = FakeConnection(config)
-            created.append(connection)
+            created_connections.append(connection)
             return connection
 
+        def crypto_factory(serial_number: str) -> FakeCrypto:
+            crypto = FakeCrypto(serial_number)
+            created_crypto.append(crypto)
+            return crypto
+
         bus = EventBus()
-        adapter = PowerstreamAdapter(_config(), connection_factory=factory, packet_encoder=_packet_encoder)  # type: ignore[arg-type]
+        adapter = PowerstreamAdapter(_config(), connection_factory=connection_factory, crypto_factory=crypto_factory)  # type: ignore[arg-type]
 
         await adapter.start(bus)
 
         assert adapter.health.online
         assert adapter.health.detail == "running"
-        assert created[0].connected
-        assert created[0].config.address == "AA:BB:CC:DD:EE:FF"
-        assert created[0].config.notify_uuid == "00000003-0000-1000-8000-00805f9b34fb"
+        assert created_crypto[0].serial_number == "SN123"
+        assert created_connections[0].connected
+        assert created_connections[0].config.address == "AA:BB:CC:DD:EE:FF"
+        assert created_connections[0].config.notify_uuid == "00000003-0000-1000-8000-00805f9b34fb"
         assert bus.subscriber_count("ecoflow/powerstream/command") == 1
 
         await adapter.stop()
@@ -98,10 +133,11 @@ def test_start_without_serial_keeps_legacy_lifecycle_without_ble() -> None:
     asyncio.run(scenario())
 
 
-def test_command_set_load_power_writes_encoded_packet() -> None:
+def test_command_set_load_power_writes_type1_encoded_packet() -> None:
     async def scenario() -> None:
         connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
-        adapter = PowerstreamAdapter(_config(), connection_factory=lambda _cfg: connection, packet_encoder=_packet_encoder)  # type: ignore[arg-type]
+        crypto = FakeCrypto("SN123")
+        adapter = PowerstreamAdapter(_config(), connection_factory=lambda _cfg: connection, crypto_factory=lambda _serial: crypto)  # type: ignore[arg-type]
         bus = EventBus()
 
         await adapter.start(bus)
@@ -109,16 +145,44 @@ def test_command_set_load_power_writes_encoded_packet() -> None:
         await asyncio.sleep(0)
 
         assert connection.writes[-1] == b"\x02\x23" + bytes([0x58, 0x02])
+        encoded_packet = crypto.encoded_packets[-1]
+        assert encoded_packet.cmd_set == 0x02
+        assert encoded_packet.cmd_id == 0x23
+        assert encoded_packet.payload == bytes([0x58, 0x02])
 
         await adapter.stop()
 
     asyncio.run(scenario())
 
 
-def test_notification_is_parsed_and_published_to_state_topic() -> None:
+def test_authentication_writes_auth_packet_when_user_id_is_configured() -> None:
     async def scenario() -> None:
         connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
-        adapter = PowerstreamAdapter(_config(serial_number=None), connection_factory=lambda _cfg: connection, packet_encoder=_packet_encoder)  # type: ignore[arg-type]
+        crypto = FakeCrypto("SN123")
+        adapter = PowerstreamAdapter(
+            _config(user_id="user"),
+            connection_factory=lambda _cfg: connection,
+            crypto_factory=lambda _serial: crypto,
+        )  # type: ignore[arg-type]
+
+        await adapter.start(EventBus())
+
+        assert crypto.encoded_packets[0].cmd_set == 0x01  # type: ignore[attr-defined]
+        assert crypto.encoded_packets[0].cmd_id == 0x20  # type: ignore[attr-defined]
+        assert len(crypto.encoded_packets[0].payload) == 32  # type: ignore[attr-defined]
+        assert connection.writes[0].startswith(b"\x01\x20")
+
+        await adapter.stop()
+
+    asyncio.run(scenario())
+
+
+def test_notification_is_decoded_parsed_and_published_to_state_topic() -> None:
+    async def scenario() -> None:
+        connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
+        crypto = FakeCrypto("SN123")
+        crypto.decoded_packets.append(FakePacket(src=1, dst=2, cmd_set=3, cmd_id=4, payload=b"\xf8\x01\x37"))
+        adapter = PowerstreamAdapter(_config(), connection_factory=lambda _cfg: connection, crypto_factory=lambda _serial: crypto)  # type: ignore[arg-type]
         bus = EventBus()
         received: list[dict[str, object]] = []
 
@@ -127,11 +191,13 @@ def test_notification_is_parsed_and_published_to_state_topic() -> None:
 
         await bus.subscribe("ecoflow/powerstream/state", handler)
         await adapter.start(bus)
-        await adapter._on_notification(b"\xf8\x01\x37")  # field 31 / bat_soc = 55
+        await connection.emit(b"status")
         await asyncio.sleep(0)
 
         assert received[-1]["message_type"] == "inverter_heartbeat"
         assert received[-1]["bat_soc"] == 55
+        assert received[-1]["src"] == 1
+        assert received[-1]["cmd_id"] == 4
 
         await adapter.stop()
 
@@ -142,7 +208,7 @@ def test_stop_unsubscribes_and_disconnects() -> None:
     async def scenario() -> None:
         connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
         bus = EventBus()
-        adapter = PowerstreamAdapter(_config(), connection_factory=lambda _cfg: connection, packet_encoder=_packet_encoder)  # type: ignore[arg-type]
+        adapter = PowerstreamAdapter(_config(), connection_factory=lambda _cfg: connection, crypto_factory=lambda _serial: FakeCrypto("SN123"))  # type: ignore[arg-type]
 
         await adapter.start(bus)
         await adapter.stop()
@@ -153,3 +219,28 @@ def test_stop_unsubscribes_and_disconnects() -> None:
         assert adapter.health.detail == "stopped"
 
     asyncio.run(scenario())
+
+
+def test_adapter_config_from_ble_device_uses_powerstream_specific_fields() -> None:
+    from nagabridge.core.config import BleDeviceConfig
+
+    config = PowerstreamAdapterConfig.from_ble_device(
+        BleDeviceConfig(
+            name="Powerstream",
+            mac="AA:BB:CC:DD:EE:FF",
+            type="powerstream",
+            serial_number="SN123",
+            user_id="USER42",
+            poll_interval_seconds=15.0,
+            reconnect_attempts=5,
+            reconnect_backoff_seconds=0.25,
+            write_with_response=True,
+        ),
+    )
+
+    assert config.serial_number == "SN123"
+    assert config.user_id == "USER42"
+    assert config.poll_interval_seconds == 15.0
+    assert config.reconnect_attempts == 5
+    assert config.reconnect_backoff_seconds == 0.25
+    assert config.write_with_response is True

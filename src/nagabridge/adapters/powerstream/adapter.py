@@ -8,7 +8,7 @@ import logging
 import struct
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Protocol
 
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.ble import BleakClientAdapter, BleConnection, BleConnectionConfig
@@ -18,6 +18,9 @@ from nagabridge.core.health import HealthStatus
 
 from .parser import parse
 
+if TYPE_CHECKING:
+    from .protocol import Type1Crypto
+
 log = logging.getLogger(__name__)
 
 UUID_WRITE = "00000002-0000-1000-8000-00805f9b34fb"
@@ -25,9 +28,32 @@ UUID_NOTIFY = "00000003-0000-1000-8000-00805f9b34fb"
 STATE_TOPIC = "ecoflow/powerstream/state"
 COMMAND_TOPIC = "ecoflow/powerstream/command"
 DEFAULT_POLL_INTERVAL_SECONDS = 30.0
+MAX_LOAD_POWER_WATTS = 8000
 
 ConnectionFactory = Callable[[BleConnectionConfig], BleConnection]
-PacketEncoder = Callable[[int, int, bytes], bytes]
+CryptoFactory = Callable[[str], "Type1Crypto"]
+
+
+class _PowerstreamPacket(Protocol):
+    """Protocol subset consumed from decoded PowerStream packets."""
+
+    src: int
+    dst: int
+    cmd_set: int
+    cmd_id: int
+    payload: bytes
+
+
+class _PowerstreamCrypto(Protocol):
+    """Protocol subset consumed from Type1Crypto and tests."""
+
+    def encode_packet(self, packet: object) -> bytes:
+        """Encode one packet for BLE write."""
+        ...
+
+    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[_PowerstreamPacket], bytearray]:
+        """Decode one or more packets from a BLE notification chunk."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,8 +73,17 @@ class PowerstreamAdapterConfig:
 
     @classmethod
     def from_ble_device(cls, config: BleDeviceConfig) -> PowerstreamAdapterConfig:
-        """Build adapter config from the current generic BLE device config."""
-        return cls(name=config.name, mac=config.mac)
+        """Build adapter config from the generic BLE device config."""
+        return cls(
+            name=config.name,
+            mac=config.mac,
+            serial_number=config.serial_number,
+            user_id=config.user_id,
+            poll_interval_seconds=config.poll_interval_seconds or DEFAULT_POLL_INTERVAL_SECONDS,
+            reconnect_attempts=config.reconnect_attempts or 3,
+            reconnect_backoff_seconds=config.reconnect_backoff_seconds if config.reconnect_backoff_seconds is not None else 1.0,
+            write_with_response=bool(config.write_with_response),
+        )
 
 
 class PowerstreamAdapter(Adapter):
@@ -59,16 +94,16 @@ class PowerstreamAdapter(Adapter):
         config: BleDeviceConfig | PowerstreamAdapterConfig,
         *,
         connection_factory: ConnectionFactory | None = None,
-        packet_encoder: PacketEncoder | None = None,
+        crypto_factory: CryptoFactory | None = None,
     ) -> None:
         """Initialize the adapter with config and injectable BLE dependencies."""
         self._config = config if isinstance(config, PowerstreamAdapterConfig) else PowerstreamAdapterConfig.from_ble_device(config)
         self._connection_factory = connection_factory or self._default_connection_factory
-        self._packet_encoder = packet_encoder
+        self._crypto_factory = crypto_factory or self._default_crypto_factory
         self._health = HealthStatus()
         self._bus: EventBus | None = None
         self._connection: BleConnection | None = None
-        self._crypto: Any | None = None
+        self._crypto: _PowerstreamCrypto | None = None
         self._rx_buffer = bytearray()
         self._poll_task: asyncio.Task[None] | None = None
 
@@ -80,7 +115,7 @@ class PowerstreamAdapter(Adapter):
     @property
     def version(self) -> str:
         """Return the adapter implementation version."""
-        return "0.2.0"
+        return "0.2.1"
 
     @property
     def health(self) -> HealthStatus:
@@ -88,7 +123,7 @@ class PowerstreamAdapter(Adapter):
         return self._health
 
     async def start(self, bus: EventBus) -> None:
-        """Start command handling, BLE connection and polling when fully configured."""
+        """Start command handling, BLE connection and polling when configured."""
         self._bus = bus
         await bus.subscribe(self._config.command_topic, self._on_command)
 
@@ -98,8 +133,7 @@ class PowerstreamAdapter(Adapter):
             return
 
         try:
-            if self._packet_encoder is None:
-                self._initialize_crypto()
+            self._initialize_crypto()
             self._connection = self._connection_factory(self._connection_config())
             await self._connection.connect(self._on_notification)
             await self._authenticate()
@@ -131,8 +165,8 @@ class PowerstreamAdapter(Adapter):
 
     async def set_load_power(self, watts: int) -> None:
         """Set the PowerStream permanent output limit in watts."""
-        if watts < 0 or watts > 8000:
-            msg = "PowerStream load power must be between 0 and 8000 W"
+        if watts < 0 or watts > MAX_LOAD_POWER_WATTS:
+            msg = f"PowerStream load power must be between 0 and {MAX_LOAD_POWER_WATTS} W"
             raise ValueError(msg)
         await self._write_packet(0x02, 0x23, struct.pack("<H", watts))
 
@@ -154,27 +188,19 @@ class PowerstreamAdapter(Adapter):
             return
         try:
             if self._crypto is None:
-                parsed = parse(data)
-                await self._publish_state(parsed)
+                await self._publish_state(parse(data))
                 return
 
             packets, self._rx_buffer = self._crypto.decode_packets(data, self._rx_buffer)
             for packet in packets:
                 parsed = parse(packet.payload)
-                parsed.update(
-                    {
-                        "src": packet.src,
-                        "dst": packet.dst,
-                        "cmd_set": packet.cmd_set,
-                        "cmd_id": packet.cmd_id,
-                    },
-                )
+                parsed.update({"src": packet.src, "dst": packet.dst, "cmd_set": packet.cmd_set, "cmd_id": packet.cmd_id})
                 await self._publish_state(parsed)
         except Exception as exc:
             log.exception("PowerStream notification handling failed")
             self._health = HealthStatus(online=False, detail=f"notification failed: {exc}")
 
-    async def _publish_state(self, payload: dict[str, Any]) -> None:
+    async def _publish_state(self, payload: Payload) -> None:
         if self._bus is None:
             return
         await self._bus.publish(self._config.state_topic, payload)
@@ -191,9 +217,14 @@ class PowerstreamAdapter(Adapter):
     async def _authenticate(self) -> None:
         if not self._config.user_id or not self._config.serial_number:
             return
-        from .protocol import build_auth_md5
+        try:
+            from .protocol import build_auth_md5
 
-        await self._write_packet(0x01, 0x20, build_auth_md5(self._config.user_id, self._config.serial_number))
+            auth_payload = build_auth_md5(self._config.user_id, self._config.serial_number)
+            await self._write_packet(0x01, 0x20, auth_payload)
+        except Exception:
+            log.exception("PowerStream authentication failed for %s", self.name)
+            raise
 
     async def _write_packet(self, cmd_set: int, cmd_id: int, payload: bytes = b"") -> None:
         if self._connection is None:
@@ -203,8 +234,6 @@ class PowerstreamAdapter(Adapter):
         await self._connection.write(encoded)
 
     def _encode_packet(self, cmd_set: int, cmd_id: int, payload: bytes) -> bytes:
-        if self._packet_encoder is not None:
-            return self._packet_encoder(cmd_set, cmd_id, payload)
         if self._crypto is None:
             msg = "PowerStream crypto is not initialized"
             raise RuntimeError(msg)
@@ -218,9 +247,7 @@ class PowerstreamAdapter(Adapter):
             return
         if self._config.serial_number is None:
             return
-        from .protocol import Type1Crypto
-
-        self._crypto = Type1Crypto(self._config.serial_number)
+        self._crypto = self._crypto_factory(self._config.serial_number)
 
     def _connection_config(self) -> BleConnectionConfig:
         return BleConnectionConfig(
@@ -236,6 +263,12 @@ class PowerstreamAdapter(Adapter):
     @staticmethod
     def _default_connection_factory(config: BleConnectionConfig) -> BleConnection:
         return BleConnection(config, lambda address: BleakClientAdapter(address, timeout=config.connect_timeout))
+
+    @staticmethod
+    def _default_crypto_factory(serial_number: str) -> Type1Crypto:
+        from .protocol import Type1Crypto
+
+        return Type1Crypto(serial_number)
 
     async def _cleanup_connection(self) -> None:
         if self._connection is not None:

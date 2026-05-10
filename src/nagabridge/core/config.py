@@ -25,6 +25,12 @@ class BleDeviceConfig:
     name: str
     mac: str
     type: Literal["powerstream", "delta2max", "delta2"]
+    serial_number: str | None = None
+    user_id: str | None = None
+    poll_interval_seconds: float | None = None
+    reconnect_attempts: int | None = None
+    reconnect_backoff_seconds: float | None = None
+    write_with_response: bool | None = None
 
 
 @dataclass(slots=True)
@@ -107,7 +113,17 @@ def _parse_ble_device(device_data: dict[str, object], idx: int) -> BleDeviceConf
         'Literal["powerstream", "delta2max", "delta2"]',
         device_type,
     )
-    return BleDeviceConfig(name=name, mac=mac, type=typed_device_type)
+    return BleDeviceConfig(
+        name=name,
+        mac=mac,
+        type=typed_device_type,
+        serial_number=_optional_str(device_data.get("serial_number")),
+        user_id=_optional_str(device_data.get("user_id")),
+        poll_interval_seconds=_optional_positive_float(device_data.get("poll_interval_seconds"), "poll_interval_seconds"),
+        reconnect_attempts=_optional_positive_int(device_data.get("reconnect_attempts"), "reconnect_attempts"),
+        reconnect_backoff_seconds=_optional_non_negative_float(device_data.get("reconnect_backoff_seconds"), "reconnect_backoff_seconds"),
+        write_with_response=_optional_bool(device_data.get("write_with_response"), "write_with_response"),
+    )
 
 
 def _parse_mqtt(mqtt_data: object) -> MqttConfig | None:
@@ -142,3 +158,46 @@ def _optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _optional_positive_float(value: object, field_name: str) -> float | None:
+    """Parse an optional positive float config value."""
+    if value is None:
+        return None
+    parsed = float(value)
+    if parsed <= 0:
+        msg = f"{field_name} muss größer als 0 sein"
+        raise ConfigError(msg)
+    return parsed
+
+
+def _optional_non_negative_float(value: object, field_name: str) -> float | None:
+    """Parse an optional non-negative float config value."""
+    if value is None:
+        return None
+    parsed = float(value)
+    if parsed < 0:
+        msg = f"{field_name} darf nicht negativ sein"
+        raise ConfigError(msg)
+    return parsed
+
+
+def _optional_positive_int(value: object, field_name: str) -> int | None:
+    """Parse an optional positive integer config value."""
+    if value is None:
+        return None
+    parsed = int(value)
+    if parsed <= 0:
+        msg = f"{field_name} muss größer als 0 sein"
+        raise ConfigError(msg)
+    return parsed
+
+
+def _optional_bool(value: object, field_name: str) -> bool | None:
+    """Parse an optional bool config value."""
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        msg = f"{field_name} muss ein Boolean sein"
+        raise ConfigError(msg)
+    return value

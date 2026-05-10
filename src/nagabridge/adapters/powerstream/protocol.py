@@ -13,8 +13,6 @@ import logging
 import struct
 from dataclasses import dataclass
 
-from Crypto.Cipher import AES  # nosec B413 - protocol compatibility with EcoFlow Type1
-
 log = logging.getLogger(__name__)
 
 # BLE GATT characteristics used by EcoFlow PowerStream.
@@ -222,7 +220,7 @@ def parse_simple(data: bytes) -> bytes | None:
 class Type1Crypto:
     """PowerStream Type1 AES-CBC transport keyed by device serial number."""
 
-    block_size = AES.block_size
+    block_size = 16
 
     def __init__(self, dev_sn: str) -> None:
         if not dev_sn:
@@ -237,6 +235,8 @@ class Type1Crypto:
         """Encrypt *data* using AES-CBC with null padding."""
         padded_len = ((len(data) + self.block_size - 1) // self.block_size) * self.block_size
         padded = data.ljust(padded_len, b"\x00")
+        from Crypto.Cipher import AES  # nosec B413 - protocol compatibility with EcoFlow Type1
+
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
         return bytes(cipher.encrypt(padded))
 
@@ -245,6 +245,8 @@ class Type1Crypto:
         if len(data) % self.block_size != 0:
             msg = "Encrypted Type1 payload length must be a multiple of AES block size"
             raise ValueError(msg)
+        from Crypto.Cipher import AES  # nosec B413 - protocol compatibility with EcoFlow Type1
+
         cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
         return bytes(cipher.decrypt(data))
 

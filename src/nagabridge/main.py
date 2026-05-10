@@ -42,6 +42,12 @@ log_level = "INFO"
 # name = "Powerstream"
 # mac = "AA:BB:CC:DD:EE:FF"
 # type = "powerstream"
+# serial_number = "POWERSTREAM_SN"
+# user_id = "ECOFLOW_USER_ID"
+# poll_interval_seconds = 30
+# reconnect_attempts = 3
+# reconnect_backoff_seconds = 1
+# write_with_response = false
 """
 
 
