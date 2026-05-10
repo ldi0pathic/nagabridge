@@ -21,7 +21,6 @@ dev = [
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
     "ruff>=0.4",
-    "black>=24.0",
     "mypy>=1.10",
     "types-paho-mqtt>=1.6.0",
 ]
