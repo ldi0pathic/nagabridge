@@ -188,13 +188,13 @@ def encode_simple(payload: bytes) -> bytes:
     Frame layout:
         5A 5A  frame_type(1)  payload_type(1)  payload_len(2)  payload(N)  crc16(2)
 
-    The ``crc16`` is computed over everything from ``frame_type`` 
+    The ``crc16`` is computed over everything from ``frame_type``
     through end of payload.
     """
     frame_type = 0x11
     payload_type = 0x01
     inner = bytes(
-            [frame_type, payload_type]) + struct.pack("<H", len(payload)
+            [frame_type, payload_type]) + struct.pack("<H", len(payload),
             ) + payload
     return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
@@ -305,7 +305,7 @@ class Type7Crypto:
         """Decrypt and parse all complete EncPackets found in *data*.
 
         Frame layout (mirrors encode_packet):
-            5A 5A frame_type(1) payload_type(1) 
+            5A 5A frame_type(1) payload_type(1)
             inner_len(2) encrypted(inner_len) crc16(2)
 
         ``inner_len`` = length of the encrypted payload only.
@@ -318,7 +318,7 @@ class Type7Crypto:
                 break
             if start > 0:
                 data = data[start:]
-            # Minimum frame: 5A5A(2) + frame_type(1) + 
+            # Minimum frame: 5A5A(2) + frame_type(1) +
             # payload_type(1) + inner_len(2) + crc16(2) = 8
             if len(data) < 8:
                 break
@@ -327,7 +327,7 @@ class Type7Crypto:
             frame_end = 6 + encrypted_len + 2
             if frame_end > len(data):
                 break
-            # CRC covers sub-header + encrypted payload 
+            # CRC covers sub-header + encrypted payload
             # (everything between prefix and CRC)
             inner = data[2 : 6 + encrypted_len]
             crc_recv = struct.unpack("<H", data[6 + encrypted_len : frame_end])[0]
@@ -335,7 +335,7 @@ class Type7Crypto:
             if crc16(inner) != crc_recv:
                 log.debug("Type7: CRC-Fehler, Paket übersprungen")
                 continue
-            payload_enc = inner[4:]  
+            payload_enc = inner[4:]
             # skip frame_type(1) + payload_type(1) + inner_len(2)
             try:
                 decrypted = self.decrypt(payload_enc)
