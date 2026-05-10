@@ -183,30 +183,44 @@ _PREFIX_5A = b"\x5a\x5a"
 
 
 def encode_simple(payload: bytes) -> bytes:
+    """Wrap *payload* in an unencrypted 5A5A EncPacket (used during auth handshake).
+
+    Frame layout:
+        5A 5A  frame_type(1)  payload_type(1)  payload_len(2)  payload(N)  crc16(2)
+
+    The ``crc16`` is computed over everything from ``frame_type`` through end of payload.
+    """
     frame_type = 0x11
     payload_type = 0x01
-    inner = (
-        bytes([frame_type, payload_type]) + struct.pack("<H", len(payload)) + payload
-    )
+    inner = bytes([frame_type, payload_type]) + struct.pack("<H", len(payload)) + payload
     return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
 
 def parse_simple(data: bytes) -> bytes | None:
+    """Extract the payload from an unencrypted 5A5A EncPacket.
+
+    Returns the raw payload bytes, or ``None`` when the frame is absent,
+    truncated, or its CRC does not match.
+    """
     start = data.find(_PREFIX_5A)
     if start < 0:
         return None
     data = data[start:]
+    # Minimum: 5A5A(2) + frame_type(1) + payload_type(1) + payload_len(2) + crc16(2) = 8
     if len(data) < 8:
         return None
-    inner_len = struct.unpack("<H", data[4:6])[0]
-    end = 6 + inner_len
-    if end > len(data):
+    payload_len = struct.unpack("<H", data[4:6])[0]
+    # inner spans from frame_type to end of payload (everything the CRC covers)
+    # inner = data[2 : 6 + payload_len]
+    # crc  = data[6 + payload_len : 6 + payload_len + 2]
+    inner_end = 6 + payload_len
+    if inner_end + 2 > len(data):
         return None
-    inner = data[2 : end - 2]
-    crc_recv = struct.unpack("<H", data[end - 2 : end])[0]
+    inner = data[2:inner_end]
+    crc_recv = struct.unpack("<H", data[inner_end : inner_end + 2])[0]
     if crc16(inner) != crc_recv:
         return None
-    return inner[4:]
+    return inner[4:]  # skip frame_type(1) + payload_type(1) + payload_len(2)
 
 
 class Type7Crypto:
@@ -285,6 +299,14 @@ class Type7Crypto:
         return _PREFIX_5A + inner + struct.pack("<H", crc16(inner))
 
     def decode_packets(self, data: bytes) -> list[Packet]:
+        """Decrypt and parse all complete EncPackets found in *data*.
+
+        Frame layout (mirrors encode_packet):
+            5A 5A  frame_type(1)  payload_type(1)  inner_len(2)  encrypted(inner_len)  crc16(2)
+
+        ``inner_len`` = length of the encrypted payload only.
+        The CRC covers everything from ``frame_type`` through end of ``encrypted``.
+        """
         packets: list[Packet] = []
         while data:
             start = data.find(_PREFIX_5A)
@@ -292,18 +314,22 @@ class Type7Crypto:
                 break
             if start > 0:
                 data = data[start:]
+            # Minimum frame: 5A5A(2) + frame_type(1) + payload_type(1) + inner_len(2) + crc16(2) = 8
             if len(data) < 8:
                 break
-            inner_len = struct.unpack("<H", data[4:6])[0]
-            end = 6 + inner_len
-            if end > len(data):
+            encrypted_len = struct.unpack("<H", data[4:6])[0]
+            # Total frame size: prefix(2) + 4-byte sub-header + encrypted + crc(2)
+            frame_end = 6 + encrypted_len + 2
+            if frame_end > len(data):
                 break
-            inner = data[2 : end - 2]
-            crc_recv = struct.unpack("<H", data[end - 2 : end])[0]
-            data = data[end:]
+            # CRC covers sub-header + encrypted payload (everything between prefix and CRC)
+            inner = data[2 : 6 + encrypted_len]
+            crc_recv = struct.unpack("<H", data[6 + encrypted_len : frame_end])[0]
+            data = data[frame_end:]
             if crc16(inner) != crc_recv:
+                log.debug("Type7: CRC-Fehler, Paket übersprungen")
                 continue
-            payload_enc = inner[4:]
+            payload_enc = inner[4:]  # skip frame_type(1) + payload_type(1) + inner_len(2)
             try:
                 decrypted = self.decrypt(payload_enc)
                 packets.append(Packet.fromBytes(decrypted))
