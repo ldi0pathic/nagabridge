@@ -1,7 +1,7 @@
 # PowerStream Integration – Status
 
 **Stand:** 10.05.2026  
-**Aktueller Fortschritt:** 2 von 7 Schritte
+**Aktueller Fortschritt:** 3 von 7 Schritte
 
 ## ✅ Erledigt
 
@@ -18,14 +18,18 @@
   - BLE-UUIDs sowie häufige Command-/Command-Set-Konstanten definiert.
   - Adapter-Package-Exports aktualisiert.
   - Unit Tests nach `tests/adapters/powerstream/test_protocol.py` verschoben/neu geschrieben.
+- [x] Schritt 2: Parser implementieren
+  - `parser.py` durch eine klare `parse(payload: bytes) -> dict[str, Any]` API ersetzt.
+  - PowerStream-Protobuf-Wire-Parser für Inverter-Heartbeat, PowerPack und HeaderMessage ergänzt.
+  - Wichtige Inverterwerte in snake_case ausgegeben und unbekannte/malformed Payloads mit Hex-Dump geloggt.
+  - Unit Tests in `tests/adapters/powerstream/test_parser.py` ergänzt.
 
 ## 🔄 In Bearbeitung
 
-- Keine aktiven Arbeiten; Schritt 2 ist der nächste geplante Schritt.
+- Keine aktiven Arbeiten; Schritt 3 ist der nächste geplante Schritt.
 
 ## ⏳ Offene Schritte
 
-- [ ] Schritt 2: Parser implementieren
 - [ ] Schritt 3: BLE-Abstraktion
 - [ ] Schritt 4: Adapter Kern
 - [ ] Schritt 5: Konfiguration & Integration
@@ -38,7 +42,7 @@
 
 ## Nächste Session-Ziele
 
-1. Schritt 2 starten: Parser-Funktionsumfang aus Prototype/Fixtures ableiten.
+1. Schritt 3 starten: wiederverwendbare BLE-Abstraktion entwerfen und testen.
 2. Echte Payload-Fixtures ergänzen, sobald Captures verfügbar sind.
 
 ---
