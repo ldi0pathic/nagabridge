@@ -1,7 +1,7 @@
 # PowerStream Integration – Status
 
 **Stand:** 10.05.2026  
-**Aktueller Fortschritt:** 4 von 7 Schritte
+**Aktueller Fortschritt:** 5 von 7 Schritte
 
 ## ✅ Erledigt
 
@@ -27,14 +27,17 @@
   - `src/nagabridge/core/ble/` mit Client-Protokoll, bleak-Adapter, Exceptions und `BleConnection` angelegt.
   - Reconnect mit Backoff, Notification-Normalisierung, Schreiboperationen und sauberes Disconnect-Handling implementiert.
   - Unit Tests in `tests/core/ble/test_connection.py` ergänzt.
+- [x] Schritt 4: Adapter Kern
+  - PowerStream-Adapter-Kern mit Config-Handling, BLE-Connection, Parser-Anbindung, Notification-Handler und Command-Methoden implementiert.
+  - Type1Crypto wird bei vorhandener Seriennummer lazy initialisiert; bestehende generische BLE-Config bleibt bis Schritt 5 kompatibel.
+  - Unit Tests in `tests/adapters/powerstream/test_adapter.py` ergänzt.
 
 ## 🔄 In Bearbeitung
 
-- Keine aktiven Arbeiten; Schritt 4 ist der nächste geplante Schritt.
+- Keine aktiven Arbeiten; Schritt 5 ist der nächste geplante Schritt.
 
 ## ⏳ Offene Schritte
 
-- [ ] Schritt 4: Adapter Kern
 - [ ] Schritt 5: Konfiguration & Integration
 - [ ] Schritt 6: Dokumentation
 
@@ -45,7 +48,7 @@
 
 ## Nächste Session-Ziele
 
-1. Schritt 4 starten: PowerStream-Adapter-Kern auf Config, Type1Crypto, Parser und BleConnection aufbauen.
+1. Schritt 5 starten: Konfigurationsschema um PowerStream-spezifische Felder erweitern und Adapter-Factory verdrahten.
 2. Echte Payload-Fixtures ergänzen, sobald Captures verfügbar sind.
 
 ---

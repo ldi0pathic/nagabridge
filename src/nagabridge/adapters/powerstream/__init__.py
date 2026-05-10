@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-from .adapter import PowerstreamAdapter
+from .adapter import PowerstreamAdapter, PowerstreamAdapterConfig
 
 _PROTOCOL_EXPORTS = {
     "COMMAND_ID_AUTH",
@@ -25,7 +25,7 @@ _PROTOCOL_EXPORTS = {
     "parse_simple",
 }
 
-__all__ = ["PowerstreamAdapter", *_PROTOCOL_EXPORTS]
+__all__ = ["PowerstreamAdapter", "PowerstreamAdapterConfig", *_PROTOCOL_EXPORTS]
 
 
 def __getattr__(name: str) -> Any:
