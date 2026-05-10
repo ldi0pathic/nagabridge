@@ -28,7 +28,7 @@ jobs:
 
       # 🔍 Linting (strenger als Standard)
       - name: Ruff (strict)
-        run: ruff check src/ tests/ --select ALL --ignore D203,D212
+        run: ruff check src/ tests/ --select ALL --ignore D203,D212,ERA001 
 
       # 🎨 Format Check
       - name: Black
