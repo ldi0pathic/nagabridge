@@ -218,3 +218,34 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
         all(not adapter.health.online for adapter in adapters),
         "All adapters should be offline after shutdown",
     )
+
+
+def test_build_adapters_from_config_passes_powerstream_specific_fields(tmp_path: Path) -> None:
+    """PowerStream-specific config values should reach the adapter factory."""
+    config = tmp_path / "nagabridge.toml"
+    config.write_text(
+        """
+[adapters]
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+serial_number = "SN123"
+user_id = "USER42"
+poll_interval_seconds = 17
+reconnect_attempts = 4
+reconnect_backoff_seconds = 0.25
+write_with_response = true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    adapters = build_adapters_from_config(config)
+    powerstream = next(adapter for adapter in adapters if isinstance(adapter, PowerstreamAdapter))
+
+    assert powerstream._config.serial_number == "SN123"  # type: ignore[attr-defined]
+    assert powerstream._config.user_id == "USER42"  # type: ignore[attr-defined]
+    assert powerstream._config.poll_interval_seconds == 17.0  # type: ignore[attr-defined]
+    assert powerstream._config.reconnect_attempts == 4  # type: ignore[attr-defined]
+    assert powerstream._config.reconnect_backoff_seconds == 0.25  # type: ignore[attr-defined]
+    assert powerstream._config.write_with_response is True  # type: ignore[attr-defined]

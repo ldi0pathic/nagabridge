@@ -171,3 +171,49 @@ port = 1883
 
     with pytest.raises(ConfigError):
         load_config(path)
+
+
+def test_load_config_powerstream_specific_fields(tmp_path: Path) -> None:
+    """PowerStream-specific BLE settings should be parsed and validated."""
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+serial_number = "SN123"
+user_id = "USER42"
+poll_interval_seconds = 12.5
+reconnect_attempts = 4
+reconnect_backoff_seconds = 0.5
+write_with_response = true
+""",
+    )
+
+    cfg = load_config(path)
+    device = cfg.devices[0]
+
+    _ensure(device.serial_number == "SN123", "serial_number should be parsed")
+    _ensure(device.user_id == "USER42", "user_id should be parsed")
+    _ensure(device.poll_interval_seconds == 12.5, "poll interval should be parsed")
+    _ensure(device.reconnect_attempts == 4, "reconnect attempts should be parsed")
+    _ensure(device.reconnect_backoff_seconds == 0.5, "backoff should be parsed")
+    _ensure(device.write_with_response is True, "write response flag should be parsed")
+
+
+def test_load_config_rejects_invalid_powerstream_poll_interval(tmp_path: Path) -> None:
+    """Invalid PowerStream timing values should fail config validation."""
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+poll_interval_seconds = 0
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
