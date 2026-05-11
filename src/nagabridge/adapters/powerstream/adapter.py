@@ -294,7 +294,7 @@ class PowerstreamAdapter(Adapter):
         return BleConnection(config, lambda address: BleakClientAdapter(address, timeout=config.connect_timeout))
 
     @staticmethod
-    def _default_crypto_factory(serial_number: str) -> Type1Crypto:
+    def _default_crypto_factory(serial_number: str) -> _PowerstreamCrypto:
         from .protocol import Type1Crypto
 
         return Type1Crypto(serial_number)
