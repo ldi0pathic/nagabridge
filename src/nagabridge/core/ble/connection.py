@@ -159,7 +159,7 @@ class BleConnection:
             return
         payload = bytes(data)
         result = self._notification_handler(payload)
-        if inspect.isawaitable(result):
+        if inspect.iscoroutine(result):
             asyncio.create_task(result)
 
     async def _safe_disconnect(self) -> None:
