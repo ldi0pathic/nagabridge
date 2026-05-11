@@ -223,6 +223,7 @@ def _decode_message(data: bytes) -> list[ProtoField]:
         number = key >> 3
         wire_type = key & 0x07
 
+        value: int | bytes
         if wire_type == WIRE_VARINT:
             value, offset = _read_varint(data, offset)
         elif wire_type == WIRE_FIXED64:
