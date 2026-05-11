@@ -19,7 +19,7 @@ from nagabridge.core.health import HealthStatus
 from .parser import parse
 
 if TYPE_CHECKING:
-    from .protocol import Type1Crypto
+    from .protocol import Packet, Type1Crypto
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class _PowerstreamCrypto(Protocol):
         """Encode one packet for BLE write."""
         ...
 
-    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[_PowerstreamPacket], bytearray]:
+    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[Packet], bytearray]:
         """Decode one or more packets from a BLE notification chunk."""
         ...
 

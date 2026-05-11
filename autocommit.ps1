@@ -8,3 +8,4 @@ python -m ruff check . --fix
 git add -A
 
 git commit -m "$Message"
+pause
