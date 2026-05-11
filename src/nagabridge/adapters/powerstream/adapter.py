@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 import struct
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
@@ -51,7 +51,7 @@ class _PowerstreamCrypto(Protocol):
         """Encode one packet for BLE write."""
         ...
 
-    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[_PowerstreamPacket], bytearray]:
+    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[Sequence[_PowerstreamPacket], bytearray]:
         """Decode one or more packets from a BLE notification chunk."""
         ...
 
