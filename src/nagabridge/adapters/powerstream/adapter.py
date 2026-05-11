@@ -34,16 +34,6 @@ ConnectionFactory = Callable[[BleConnectionConfig], BleConnection]
 CryptoFactory = Callable[[str], "Type1Crypto"]
 
 
-class _PowerstreamPacket(Protocol):
-    """Protocol subset consumed from decoded PowerStream packets."""
-
-    src: int
-    dst: int
-    cmd_set: int
-    cmd_id: int
-    payload: bytes
-
-
 class _PowerstreamCrypto(Protocol):
     """Protocol subset consumed from Type1Crypto and tests."""
 
@@ -51,7 +41,7 @@ class _PowerstreamCrypto(Protocol):
         """Encode one packet for BLE write."""
         ...
 
-    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[Sequence[_PowerstreamPacket], bytearray]:
+    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[Sequence[Packet], bytearray]:
         """Decode one or more packets from a BLE notification chunk."""
         ...
 
