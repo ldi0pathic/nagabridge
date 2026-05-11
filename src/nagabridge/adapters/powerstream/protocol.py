@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import struct
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
@@ -255,7 +256,7 @@ class Type1Crypto:
         raw = packet.to_bytes()
         return raw[:HEADER_LENGTH] + self.encrypt(raw[HEADER_LENGTH:])
 
-    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[list[Packet], bytearray]:
+    def decode_packets(self, data: bytes, buffer: bytearray) -> tuple[Sequence[Packet], bytearray]:
         """Decode all complete Type1 packets from a BLE notification chunk.
 
         Incomplete trailing data is returned as the next buffer.  Invalid frames
