@@ -326,12 +326,13 @@ def _parse_power_item(payload: bytes) -> dict[str, Any]:
         name = POWER_ITEM_FIELDS.get(field.number, f"unknown_{field.number}")
         if field.wire_type != WIRE_VARINT:
             item[name] = _format_wire_value(field.value)
-        elif field.number == 2:
-            item[name] = _decode_zigzag32(int(field.value))
-        elif field.number == 5:
-            item[name] = _coerce_int32(field.value)
-        else:
-            item[name] = int(field.value)
+        elif isinstance(field.value, int):
+            if field.number == 2:
+                item[name] = _decode_zigzag32(field.value)
+            elif field.number == 5:
+                item[name] = _coerce_int32(field.value)
+            else:
+                item[name] = field.value
     return item
 
 
