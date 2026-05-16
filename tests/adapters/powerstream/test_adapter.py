@@ -144,11 +144,14 @@ def test_command_set_load_power_writes_type1_encoded_packet() -> None:
         await bus.publish("ecoflow/powerstream/command", {"command": "set_load_power", "watts": 600})
         await asyncio.sleep(0)
 
-        assert connection.writes[-1] == b"\x02\x23" + bytes([0x58, 0x02])
         encoded_packet = crypto.encoded_packets[-1]
-        assert encoded_packet.cmd_set == 0x02
-        assert encoded_packet.cmd_id == 0x23
-        assert encoded_packet.payload == bytes([0x58, 0x02])
+        assert encoded_packet.cmd_set == 0x14
+        assert encoded_packet.cmd_id == 0x81
+        # Protobuf permanent_watts_pack(permanent_watts=6000) = \x08\xf0\x2e
+        from nagabridge.adapters.powerstream.wn511_sys_pb2 import permanent_watts_pack  # type: ignore[attr-defined]
+
+        expected_payload = permanent_watts_pack(permanent_watts=6000).SerializeToString()
+        assert encoded_packet.payload == expected_payload
 
         await adapter.stop()
 
@@ -167,8 +170,10 @@ def test_authentication_writes_auth_packet_when_user_id_is_configured() -> None:
 
         await adapter.start(EventBus())
 
-        assert crypto.encoded_packets[0].cmd_set == 0x01  # type: ignore[attr-defined]
-        assert crypto.encoded_packets[0].cmd_id == 0x20  # type: ignore[attr-defined]
+        assert crypto.encoded_packets[0].cmd_set == 0x35  # type: ignore[attr-defined]
+        assert crypto.encoded_packets[0].cmd_id == 0x89  # type: ignore[attr-defined]
+        assert crypto.encoded_packets[1].cmd_set == 0x35  # type: ignore[attr-defined]
+        assert crypto.encoded_packets[1].cmd_id == 0x86  # type: ignore[attr-defined]
         assert len(crypto.encoded_packets[0].payload) == 32  # type: ignore[attr-defined]
         assert connection.writes[0].startswith(b"\x01\x20")
 

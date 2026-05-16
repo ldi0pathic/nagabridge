@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import struct
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
@@ -155,11 +154,13 @@ class PowerstreamAdapter(Adapter):
         await self._write_packet(0x02, 0x22)
 
     async def set_load_power(self, watts: int) -> None:
-        """Set the PowerStream permanent output limit in watts."""
         if watts < 0 or watts > MAX_LOAD_POWER_WATTS:
             msg = f"PowerStream load power must be between 0 and {MAX_LOAD_POWER_WATTS} W"
             raise ValueError(msg)
-        await self._write_packet(0x02, 0x23, struct.pack("<H", watts))
+        from .wn511_sys_pb2 import permanent_watts_pack  # type: ignore[attr-defined]
+
+        payload = permanent_watts_pack(permanent_watts=int(watts * 10)).SerializeToString()
+        await self._write_packet(0x14, 0x81, payload, dsrc=0x01, ddst=0x01)
 
     async def _on_command(self, _topic: Topic, payload: Payload) -> None:
         command = payload.get("command") or payload.get("type")

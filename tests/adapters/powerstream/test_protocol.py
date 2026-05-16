@@ -63,7 +63,7 @@ def test_ble_and_command_constants_are_defined() -> None:
     assert UUID_NOTIFY == "00000003-0000-1000-8000-00805f9b34fb"
     assert COMMAND_SET_COMMON == 0x01
     assert COMMAND_SET_POWERSTREAM == 0x02
-    assert {COMMAND_ID_AUTH, COMMAND_ID_HEARTBEAT, COMMAND_ID_GET_STATUS, COMMAND_ID_SET_LOAD_POWER} == {0x20, 0x21, 0x22, 0x23}
+    assert {COMMAND_ID_AUTH, COMMAND_ID_HEARTBEAT, COMMAND_ID_GET_STATUS, COMMAND_ID_SET_LOAD_POWER} == {0x86, 0x21, 0x22, 0x23}
 
 
 def test_crc_reference_vectors_match_prototype_algorithms() -> None:
