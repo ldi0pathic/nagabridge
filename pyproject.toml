@@ -54,12 +54,13 @@ ignore = [
     "E402",
     "S101",
 ]
+"src/**/wn511_sys_pb2.py" = ["ALL"]
 
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "src"
 explicit_package_bases = true
-
 disallow_untyped_defs = true
 check_untyped_defs = true
 warn_unused_ignores = true
+exclude = ["wn511_sys_pb2\\.py"]

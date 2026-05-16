@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# BLE capture debug files
+ble_capture/
+
 # Distribution / packaging
 .Python
 build/

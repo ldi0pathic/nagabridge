@@ -8,15 +8,13 @@ import logging
 import struct
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.ble import BleakClientAdapter, BleConnection, BleConnectionConfig
 from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthStatus
-
-from .parser import parse
 
 if TYPE_CHECKING:
     from .protocol import Packet, Type1Crypto
@@ -97,6 +95,8 @@ class PowerstreamAdapter(Adapter):
         self._rx_buffer = bytearray()
         self._authenticated = False
         self._poll_task: asyncio.Task[None] | None = None
+        self._last_state: dict[str, Any] = {}
+        self._last_bat_state: dict[str, Any] = {}
 
     @property
     def name(self) -> str:
@@ -179,25 +179,28 @@ class PowerstreamAdapter(Adapter):
             return
         try:
             if self._crypto is None:
-                await self._publish_state(parse(data))
                 return
-
             packets, self._rx_buffer = self._crypto.decode_packets(data, self._rx_buffer)
             for packet in packets:
-                parsed = parse(packet.payload)
-                parsed.update({"src": packet.src, "dst": packet.dst, "cmd_set": packet.cmd_set, "cmd_id": packet.cmd_id})
-                await self._publish_state(parsed)
+                from .parser import parse, parse_type2
+
+                if packet.cmd_set == 0x14 and packet.cmd_id == 0x01:
+                    await self._publish_state(parse(packet.payload))
+                elif packet.cmd_set == 0x14 and packet.cmd_id == 0x04:
+                    await self._publish_state(parse_type2(packet.payload), "ecoflow/powerstream/bat_state")
+                else:
+                    log.debug("Unhandled packet src=0x%02x cmd_set=0x%02x cmd_id=0x%02x", packet.src, packet.cmd_set, packet.cmd_id)
         except Exception as exc:
             log.exception("PowerStream notification handling failed")
             self._health = HealthStatus(online=False, detail=f"notification failed: {exc}")
 
-    async def _publish_state(self, payload: Payload) -> None:
-        """Publish a minimal ADR-002 state payload on the configured state topic."""
+    async def _publish_state(self, payload: Payload, topic: str | None = None) -> None:
         if self._bus is None:
             return
-        if not self._config.state_topic.endswith("/state"):
-            log.warning("PowerStream state topic should end with /state: %s", self._config.state_topic)
-        await self._bus.publish(self._config.state_topic, dict(payload))
+        target = topic or self._config.state_topic
+        cache = self._last_bat_state if topic else self._last_state
+        cache.update(payload)
+        await self._bus.publish(target, dict(cache))
 
     async def _poll_loop(self) -> None:
         while True:
@@ -218,13 +221,15 @@ class PowerstreamAdapter(Adapter):
             return
 
         try:
-            from .protocol import build_auth_md5
+            from .protocol import COMMAND_ID_AUTH, COMMAND_ID_AUTH_STATUS, COMMAND_SET_AUTH, build_auth_md5
 
             auth_payload = build_auth_md5(self._config.user_id, self._config.serial_number)
             if len(auth_payload) != 32:
                 msg = "PowerStream auth MD5 payload must be 32 ASCII bytes"
                 raise ValueError(msg)
-            await self._write_packet(0x01, 0x20, auth_payload)
+            await self._write_packet(COMMAND_SET_AUTH, COMMAND_ID_AUTH_STATUS, b"", dsrc=0x01, ddst=0x01)
+            await asyncio.sleep(1)
+            await self._write_packet(COMMAND_SET_AUTH, COMMAND_ID_AUTH, auth_payload, dsrc=0x01, ddst=0x01)
             self._authenticated = True
             log.info("PowerStream %s authentication packet sent", self.name)
         except Exception as exc:
@@ -232,20 +237,20 @@ class PowerstreamAdapter(Adapter):
             log.exception("PowerStream authentication failed for %s", self.name)
             raise
 
-    async def _write_packet(self, cmd_set: int, cmd_id: int, payload: bytes = b"") -> None:
+    async def _write_packet(self, cmd_set: int, cmd_id: int, payload: bytes = b"", dsrc: int = 1, ddst: int = 1) -> None:
         if self._connection is None:
             log.debug("Skipping PowerStream write because BLE is not connected")
             return
-        encoded = self._encode_packet(cmd_set, cmd_id, payload)
+        encoded = self._encode_packet(cmd_set, cmd_id, payload, dsrc=dsrc, ddst=ddst)
         await self._connection.write(encoded)
 
-    def _encode_packet(self, cmd_set: int, cmd_id: int, payload: bytes) -> bytes:
+    def _encode_packet(self, cmd_set: int, cmd_id: int, payload: bytes, dsrc: int = 1, ddst: int = 1) -> bytes:
         if self._crypto is None:
             msg = "PowerStream crypto is not initialized"
             raise RuntimeError(msg)
         from .protocol import Packet
 
-        packet = Packet(src=0x21, dst=0x35, cmd_set=cmd_set, cmd_id=cmd_id, payload=payload)
+        packet = Packet(src=0x21, dst=0x35, cmd_set=cmd_set, cmd_id=cmd_id, payload=payload, dsrc=dsrc, ddst=ddst)
         return self._crypto.encode_packet(packet)
 
     def _initialize_crypto(self) -> None:
@@ -294,3 +299,5 @@ class PowerstreamAdapter(Adapter):
             await self._connection.disconnect()
             self._connection = None
         self._rx_buffer = bytearray()
+        self._last_state = {}
+        self._last_bat_state = {}
