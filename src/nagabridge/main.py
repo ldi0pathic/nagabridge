@@ -123,17 +123,17 @@ async def run(
 ) -> None:
     """Run adapter lifecycle until shutdown signal is received."""
     bus = EventBus()
-    
+
     # Use provided log_dir or default to system path
     if log_dir is None:
         log_dir = Path("/var/log/nagabridge")
-    
+
     # Try to create log directory; silently skip if not writable
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError):
         log_dir = None
-    
+
     adapters = build_adapters_from_config(
         config_path,
         log_level_override=log_level_override,
