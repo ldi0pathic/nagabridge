@@ -53,15 +53,15 @@ def configure_logging(
     stdout_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FMT))
 
     root = logging.getLogger("nagabridge")
+    root.setLevel(numeric_level)
+    root.handlers.clear()
+    root.addHandler(stdout_handler)
 
     # --- core file handler ---
     if log_dir is not None:
         core_file_handler = _rotating_file_handler(log_dir / "nagabridge.log", numeric_level)
         root.addHandler(core_file_handler)
 
-    root.setLevel(numeric_level)
-    root.handlers.clear()
-    root.addHandler(stdout_handler)
     root.propagate = False
 
     # --- per-adapter file handlers ---
