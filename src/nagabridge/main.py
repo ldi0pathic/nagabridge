@@ -98,7 +98,21 @@ def build_adapters_from_config(
             ),
         )
 
-    configure_logging(log_level_override or cfg.log_level)
+    # Build logger-prefix → file-stem mapping for ADR-012 per-adapter log files.
+    # BLE adapters use their device name slug; MQTT gets a fixed name.
+    adapter_log_names: dict[str, str] = {}
+    for device in cfg.devices:
+        slug = device.name.lower().replace(" ", "-")
+        # PowerStream adapter logger lives under nagabridge.adapters.powerstream
+        prefix = f"nagabridge.adapters.{device.type}"
+        adapter_log_names[prefix] = f"ble-{slug}"
+    if cfg.mqtt is not None:
+        adapter_log_names["nagabridge.adapters.mqtt"] = "mqtt"
+
+    configure_logging(
+        log_level_override or cfg.log_level,
+        adapter_log_names=adapter_log_names,
+    )
     return adapters
 
 
