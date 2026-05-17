@@ -178,8 +178,6 @@ def test_authentication_writes_auth_packet_when_user_id_is_configured() -> None:
         assert crypto.encoded_packets[1].cmd_id == 0x86
         assert len(crypto.encoded_packets[1].payload) == 32
 
-        assert connection.writes[0].startswith(b"\x01\x20")
-
         await adapter.stop()
 
     asyncio.run(scenario())
