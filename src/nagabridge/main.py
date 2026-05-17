@@ -111,6 +111,7 @@ def build_adapters_from_config(
 
     configure_logging(
         log_level_override or cfg.log_level,
+        log_dir=Path("/var/log/nagabridge"),
         adapter_log_names=adapter_log_names,
     )
     return adapters

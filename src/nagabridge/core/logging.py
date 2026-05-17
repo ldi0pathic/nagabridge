@@ -31,7 +31,7 @@ def _rotating_file_handler(path: Path, level: int) -> logging.handlers.TimedRota
 def configure_logging(
     level: str = "INFO",
     *,
-    log_dir: Path = LOG_DIR,
+    log_dir: Path | None = None,
     adapter_log_names: dict[str, str] | None = None,
 ) -> None:
     """Configure process-wide logging with stdout + per-adapter file output.
@@ -52,14 +52,16 @@ def configure_logging(
     stdout_handler.setLevel(numeric_level)
     stdout_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FMT))
 
-    # --- core file handler ---
-    core_file_handler = _rotating_file_handler(log_dir / "nagabridge.log", numeric_level)
-
     root = logging.getLogger("nagabridge")
+
+    # --- core file handler ---
+    if log_dir is not None:
+        core_file_handler = _rotating_file_handler(log_dir / "nagabridge.log", numeric_level)
+        root.addHandler(core_file_handler)
+
     root.setLevel(numeric_level)
     root.handlers.clear()
     root.addHandler(stdout_handler)
-    root.addHandler(core_file_handler)
     root.propagate = False
 
     # --- per-adapter file handlers ---
@@ -70,6 +72,7 @@ def configure_logging(
         adapter_logger.handlers.clear()
         adapter_logger.propagate = False
         # adapter file
-        adapter_logger.addHandler(_rotating_file_handler(log_dir / f"{file_stem}.log", numeric_level))
+        if log_dir is not None:
+            adapter_logger.addHandler(_rotating_file_handler(log_dir / f"{file_stem}.log", numeric_level))
         # still mirror to stdout via root handler
         adapter_logger.addHandler(stdout_handler)
