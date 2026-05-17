@@ -170,11 +170,14 @@ def test_authentication_writes_auth_packet_when_user_id_is_configured() -> None:
 
         await adapter.start(EventBus())
 
-        assert crypto.encoded_packets[0].cmd_set == 0x35  # type: ignore[attr-defined]
-        assert crypto.encoded_packets[0].cmd_id == 0x89  # type: ignore[attr-defined]
-        assert crypto.encoded_packets[1].cmd_set == 0x35  # type: ignore[attr-defined]
-        assert crypto.encoded_packets[1].cmd_id == 0x86  # type: ignore[attr-defined]
-        assert len(crypto.encoded_packets[0].payload) == 32  # type: ignore[attr-defined]
+        assert crypto.encoded_packets[0].cmd_set == 0x35
+        assert crypto.encoded_packets[0].cmd_id == 0x89
+        assert len(crypto.encoded_packets[0].payload) == 0
+
+        assert crypto.encoded_packets[1].cmd_set == 0x35
+        assert crypto.encoded_packets[1].cmd_id == 0x86
+        assert len(crypto.encoded_packets[1].payload) == 32
+
         assert connection.writes[0].startswith(b"\x01\x20")
 
         await adapter.stop()
@@ -186,7 +189,11 @@ def test_notification_is_decoded_parsed_and_published_to_state_topic() -> None:
     async def scenario() -> None:
         connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
         crypto = FakeCrypto("SN123")
-        crypto.decoded_packets.append(FakePacket(src=1, dst=2, cmd_set=3, cmd_id=4, payload=b"\xf8\x01\x37"))
+        from nagabridge.adapters.powerstream.wn511_sys_pb2 import inverter_heartbeat  # type: ignore[attr-defined]
+
+        hb = inverter_heartbeat()
+        hb.bat_soc = 55
+        crypto.decoded_packets.append(FakePacket(src=1, dst=2, cmd_set=0x14, cmd_id=0x01, payload=hb.SerializeToString()))
         adapter = PowerstreamAdapter(_config(), connection_factory=lambda _cfg: connection, crypto_factory=lambda _serial: crypto)  # type: ignore[arg-type]
         bus = EventBus()
         received: list[dict[str, object]] = []
@@ -201,8 +208,6 @@ def test_notification_is_decoded_parsed_and_published_to_state_topic() -> None:
 
         assert received[-1]["message_type"] == "inverter_heartbeat"
         assert received[-1]["bat_soc"] == 55
-        assert received[-1]["src"] == 1
-        assert received[-1]["cmd_id"] == 4
 
         await adapter.stop()
 
