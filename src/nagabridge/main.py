@@ -74,9 +74,7 @@ def _build_ble_adapter(device: BleDeviceConfig) -> Adapter:
 
 
 def build_adapters_from_config(
-    config_path: Path = DEFAULT_CONFIG_PATH,
-    *,
-    log_level_override: str | None = None,
+    config_path: Path = DEFAULT_CONFIG_PATH, *, log_level_override: str | None = None, log_dir: Path | None = None
 ) -> list[Adapter]:
     """Build all adapters from the TOML configuration file."""
     cfg = load_config(config_path)
@@ -111,7 +109,7 @@ def build_adapters_from_config(
 
     configure_logging(
         log_level_override or cfg.log_level,
-        log_dir=Path("/var/log/nagabridge"),
+        log_dir=log_dir,
         adapter_log_names=adapter_log_names,
     )
     return adapters
@@ -127,6 +125,7 @@ async def run(
     adapters = build_adapters_from_config(
         config_path,
         log_level_override=log_level_override,
+        log_dir=Path("/var/log/nagabridge"),
     )
 
     shutdown_event = asyncio.Event()
