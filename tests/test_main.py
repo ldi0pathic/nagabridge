@@ -169,6 +169,7 @@ def test_run_starts_and_stops_cleanly(
 
     async def scenario() -> None:
         config = _write_config(tmp_path)
+        log_dir = tmp_path / "logs"
 
         async def trigger_shutdown() -> None:
             await asyncio.sleep(0)
@@ -176,7 +177,7 @@ def test_run_starts_and_stops_cleanly(
 
         trigger_task = asyncio.create_task(trigger_shutdown())
         _ = trigger_task
-        await run(config)
+        await run(config, log_dir=log_dir)
 
     asyncio.run(scenario())
 
