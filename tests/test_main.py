@@ -208,7 +208,18 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
         for adapter in adapters:
             await adapter.start(bus)
 
-        _ensure(all(a.health.online for a in adapters), "All adapters should be online")
+        _ensure(
+            adapters[0].health.online is True,
+            "Implemented PowerStream adapter should be online after start",
+        )
+        _ensure(
+            adapters[1].health.online is False,
+            "Unimplemented Delta2 adapter should stay offline after start",
+        )
+        _ensure(
+            adapters[1].health.detail == "not implemented",
+            "Unimplemented Delta2 adapter should report not implemented",
+        )
 
         shutdown_event.set()
         await shutdown_event.wait()

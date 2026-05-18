@@ -97,6 +97,10 @@ Liste aller BLE-Geräte. Jeder Eintrag definiert ein Gerät.
 * `type` – Gerätetyp, bestimmt welcher Protokoll-Handler
   geladen wird. Gültige Werte: `powerstream`, `delta2max`, `delta2`
 
+Hinweis: `delta2` und `delta2max` sind aktuell nur Adapter-Stubs. Sie
+werden beim Start als `online = false` mit Detail `not implemented`
+gemeldet, bis Type7Crypto und BLE-Lifecycle produktiv implementiert sind.
+
 ### Geräte-Topics aus der Config
 
 Der `name` eines BLE-Geräts wird normalisiert und als
