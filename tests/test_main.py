@@ -1,14 +1,13 @@
 """Tests for application bootstrap and runtime lifecycle."""
 
 import asyncio
-import os
-import signal
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from nagabridge.adapters.delta2.adapter import Delta2Adapter
+from nagabridge.adapters.mqtt.adapter import MqttAdapter
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
@@ -149,6 +148,13 @@ def test_build_adapters_from_config_includes_expected_names(tmp_path: Path) -> N
     _ensure("Delta2" in names, "Delta2 adapter should be present")
     _ensure("mqtt" in names, "MQTT adapter should be present")
 
+    mqtt = next(adapter for adapter in adapters if isinstance(adapter, MqttAdapter))
+    assert mqtt._config.publish_prefix == "nagabridge"  # type: ignore[attr-defined]
+    assert mqtt._config.subscribe_topics == [  # type: ignore[attr-defined]
+        "ecoflow/powerstream/state",
+        "ecoflow/powerstream/bat_state",
+    ]
+
 
 def test_run_starts_and_stops_cleanly(
     tmp_path: Path,
@@ -171,12 +177,16 @@ def test_run_starts_and_stops_cleanly(
         config = _write_config(tmp_path)
         log_dir = tmp_path / "logs"
 
-        async def trigger_shutdown() -> None:
-            await asyncio.sleep(0)
-            os.kill(os.getpid(), signal.SIGINT)
+        def _register_shutdown(
+            loop: asyncio.AbstractEventLoop,
+            shutdown_event: asyncio.Event,
+        ) -> None:
+            loop.call_soon(shutdown_event.set)
 
-        trigger_task = asyncio.create_task(trigger_shutdown())
-        _ = trigger_task
+        monkeypatch.setattr(
+            "nagabridge.main._register_shutdown_signal_handlers",
+            _register_shutdown,
+        )
         await run(config, log_dir=log_dir)
 
     asyncio.run(scenario())
@@ -195,18 +205,12 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
         bus = EventBus()
         shutdown_event = asyncio.Event()
 
-        def _handle_shutdown() -> None:
-            shutdown_event.set()
-
-        loop = asyncio.get_running_loop()
-        loop.add_signal_handler(signal.SIGINT, _handle_shutdown)
-
         for adapter in adapters:
             await adapter.start(bus)
 
         _ensure(all(a.health.online for a in adapters), "All adapters should be online")
 
-        os.kill(os.getpid(), signal.SIGINT)
+        shutdown_event.set()
         await shutdown_event.wait()
 
         await bus.publish("system/nagabridge/shutdown", {"reason": "test"})
