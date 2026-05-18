@@ -88,12 +88,19 @@ class FakeConnection:
 
 
 def _config(**overrides: object) -> PowerstreamAdapterConfig:
-    values = {
-        "name": "PowerStream",
+    from nagabridge.core.topics import bat_state_topic, command_topic, state_topic
+
+    name = str(overrides.get("name", "PowerStream"))
+    domain = str(overrides.get("domain", "ecoflow"))
+    values: dict[str, object] = {
+        "name": name,
         "mac": "AA:BB:CC:DD:EE:FF",
         "serial_number": "SN123",
         "poll_interval_seconds": 3600.0,
         "reconnect_backoff_seconds": 0.0,
+        "state_topic": state_topic(domain, name),
+        "command_topic": command_topic(domain, name),
+        "bat_state_topic": bat_state_topic(domain, name),
     }
     values.update(overrides)
     return PowerstreamAdapterConfig(**values)  # type: ignore[arg-type]

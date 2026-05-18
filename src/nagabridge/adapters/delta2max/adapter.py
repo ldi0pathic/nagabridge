@@ -34,6 +34,13 @@ class Delta2MaxAdapter(Adapter):
         _ = bus
         self._health = HealthStatus(online=False, detail="not implemented")
 
+    @property
+    def published_topics(self) -> list[str]:
+        """Return state topics published by this adapter."""
+        from nagabridge.core.topics import state_topic
+
+        return [state_topic(self._config.domain, self._config.name)]
+
     async def stop(self) -> None:
         """Stop the adapter lifecycle."""
         self._health = HealthStatus(online=False, detail="stopped")

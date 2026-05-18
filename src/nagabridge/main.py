@@ -91,10 +91,7 @@ def build_adapters_from_config(
                     port=cfg.mqtt.port,
                     user=cfg.mqtt.user,
                     password=cfg.mqtt.password,
-                    subscribe_topics=[
-                        "ecoflow/powerstream/state",
-                        "ecoflow/powerstream/bat_state",
-                    ],
+                    subscribe_topics=[t for a in adapters for t in a.published_topics],
                 )
             ),
         )
