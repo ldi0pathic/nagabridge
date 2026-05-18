@@ -25,11 +25,7 @@ def test_stub_adapter_lifecycle_health_states() -> None:
 
     async def scenario() -> None:
         bus = EventBus()
-        adapters = [
-            PowerstreamAdapter(_cfg("Powerstream", "powerstream")),
-            Delta2Adapter(_cfg("Delta2", "delta2")),
-            Delta2MaxAdapter(_cfg("Delta2Max", "delta2max")),
-        ]
+        adapters = [PowerstreamAdapter(_cfg("Powerstream", "powerstream"))]
 
         for adapter in adapters:
             _ensure(adapter.health.online is False, "Adapter must start offline")
@@ -67,6 +63,30 @@ def test_stub_adapter_lifecycle_health_states() -> None:
             _ensure(
                 adapter.health.detail == "stopped",
                 "Adapter detail must be 'stopped' after stop()",
+            )
+
+    asyncio.run(scenario())
+
+
+def test_unimplemented_delta_adapters_stay_offline_after_start() -> None:
+    """Delta stubs must not report production readiness before Type7 exists."""
+
+    async def scenario() -> None:
+        bus = EventBus()
+        adapters = [
+            Delta2Adapter(_cfg("Delta2", "delta2")),
+            Delta2MaxAdapter(_cfg("Delta2Max", "delta2max")),
+        ]
+
+        for adapter in adapters:
+            await adapter.start(bus)
+            _ensure(
+                adapter.health.online is False,
+                "Unimplemented adapter must stay offline after start()",
+            )
+            _ensure(
+                adapter.health.detail == "not implemented",
+                "Unimplemented adapter detail must explain unavailable state",
             )
 
     asyncio.run(scenario())

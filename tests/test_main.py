@@ -1,17 +1,18 @@
 """Tests for application bootstrap and runtime lifecycle."""
 
 import asyncio
-import os
-import signal
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from nagabridge.adapters.delta2.adapter import Delta2Adapter
+from nagabridge.adapters.mqtt.adapter import MqttAdapter
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
+from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
+from nagabridge.core.health import HealthStatus
 from nagabridge.main import (
     DEFAULT_CONFIG_PATH,
     EXIT_CONFIG_ACTION_REQUIRED,
@@ -63,6 +64,67 @@ class FakeMqttClient:
         _ = payload
         _ = qos
         _ = retain
+
+
+class FailingStartAdapter(Adapter):
+    """Test adapter that fails during start but can still be stopped."""
+
+    def __init__(self, name: str = "failing") -> None:
+        self._name = name
+        self._health = HealthStatus()
+        self.stop_called = False
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def version(self) -> str:
+        return "test"
+
+    @property
+    def health(self) -> HealthStatus:
+        return self._health
+
+    async def start(self, bus: EventBus) -> None:
+        _ = bus
+        self._health = HealthStatus(online=False, detail="start failed")
+        raise RuntimeError("boom")
+
+    async def stop(self) -> None:
+        self.stop_called = True
+        self._health = HealthStatus(online=False, detail="stopped")
+
+
+class HealthyAdapter(Adapter):
+    """Test adapter that starts and stops cleanly."""
+
+    def __init__(self, name: str = "healthy") -> None:
+        self._name = name
+        self._health = HealthStatus()
+        self.start_called = False
+        self.stop_called = False
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def version(self) -> str:
+        return "test"
+
+    @property
+    def health(self) -> HealthStatus:
+        return self._health
+
+    async def start(self, bus: EventBus) -> None:
+        _ = bus
+        self.start_called = True
+        self._health = HealthStatus(online=True, detail="running")
+
+    async def stop(self) -> None:
+        self.stop_called = True
+        self._health = HealthStatus(online=False, detail="stopped")
 
 
 def _write_config(tmp_path: Path) -> Path:
@@ -149,6 +211,13 @@ def test_build_adapters_from_config_includes_expected_names(tmp_path: Path) -> N
     _ensure("Delta2" in names, "Delta2 adapter should be present")
     _ensure("mqtt" in names, "MQTT adapter should be present")
 
+    mqtt = next(adapter for adapter in adapters if isinstance(adapter, MqttAdapter))
+    assert mqtt._config.publish_prefix == "nagabridge"  # type: ignore[attr-defined]
+    assert mqtt._config.subscribe_topics == [  # type: ignore[attr-defined]
+        "ecoflow/powerstream/state",
+        "ecoflow/powerstream/bat_state",
+    ]
+
 
 def test_run_starts_and_stops_cleanly(
     tmp_path: Path,
@@ -171,13 +240,51 @@ def test_run_starts_and_stops_cleanly(
         config = _write_config(tmp_path)
         log_dir = tmp_path / "logs"
 
-        async def trigger_shutdown() -> None:
-            await asyncio.sleep(0)
-            os.kill(os.getpid(), signal.SIGINT)
+        def _register_shutdown(
+            loop: asyncio.AbstractEventLoop,
+            shutdown_event: asyncio.Event,
+        ) -> None:
+            loop.call_soon(shutdown_event.set)
 
-        trigger_task = asyncio.create_task(trigger_shutdown())
-        _ = trigger_task
+        monkeypatch.setattr(
+            "nagabridge.main._register_shutdown_signal_handlers",
+            _register_shutdown,
+        )
         await run(config, log_dir=log_dir)
+
+    asyncio.run(scenario())
+
+
+def test_run_continues_when_an_adapter_fails_during_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`run` should keep running when one adapter fails during startup."""
+
+    async def scenario() -> None:
+        failing = FailingStartAdapter()
+        healthy = HealthyAdapter()
+
+        def _register_shutdown(
+            loop: asyncio.AbstractEventLoop,
+            shutdown_event: asyncio.Event,
+        ) -> None:
+            loop.call_soon(shutdown_event.set)
+
+        monkeypatch.setattr(
+            "nagabridge.main.build_adapters_from_config",
+            lambda *args, **kwargs: [failing, healthy],
+        )
+        monkeypatch.setattr(
+            "nagabridge.main._register_shutdown_signal_handlers",
+            _register_shutdown,
+        )
+
+        await run(tmp_path / "unused.toml", log_dir=tmp_path / "logs")
+
+        assert healthy.start_called is True
+        assert healthy.stop_called is True
+        assert failing.stop_called is True
 
     asyncio.run(scenario())
 
@@ -195,18 +302,23 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
         bus = EventBus()
         shutdown_event = asyncio.Event()
 
-        def _handle_shutdown() -> None:
-            shutdown_event.set()
-
-        loop = asyncio.get_running_loop()
-        loop.add_signal_handler(signal.SIGINT, _handle_shutdown)
-
         for adapter in adapters:
             await adapter.start(bus)
 
-        _ensure(all(a.health.online for a in adapters), "All adapters should be online")
+        _ensure(
+            adapters[0].health.online is True,
+            "Implemented PowerStream adapter should be online after start",
+        )
+        _ensure(
+            adapters[1].health.online is False,
+            "Unimplemented Delta2 adapter should stay offline after start",
+        )
+        _ensure(
+            adapters[1].health.detail == "not implemented",
+            "Unimplemented Delta2 adapter should report not implemented",
+        )
 
-        os.kill(os.getpid(), signal.SIGINT)
+        shutdown_event.set()
         await shutdown_event.wait()
 
         await bus.publish("system/nagabridge/shutdown", {"reason": "test"})

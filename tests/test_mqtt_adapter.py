@@ -121,6 +121,39 @@ def test_mqtt_adapter_stop_before_start_is_safe() -> None:
     asyncio.run(scenario())
 
 
+def test_mqtt_adapter_forwards_battery_state_by_default() -> None:
+    """Adapter should publish PowerStream battery state with the default prefix."""
+
+    async def scenario() -> None:
+        bus = EventBus()
+        fake_client = FakeMqttClient()
+        adapter = MqttAdapter(
+            MqttAdapterConfig(host="broker.local"),
+            client_factory=lambda: fake_client,
+        )
+
+        await adapter.start(bus)
+        await bus.publish("ecoflow/powerstream/bat_state", {"soc": 80})
+        await asyncio.sleep(0)
+
+        _ensure(
+            fake_client.published
+            == [
+                (
+                    "nagabridge/ecoflow/powerstream/bat_state",
+                    json.dumps({"soc": 80}),
+                    0,
+                    False,
+                ),
+            ],
+            "Published battery-state topic should include the nagabridge prefix",
+        )
+
+        await adapter.stop()
+
+    asyncio.run(scenario())
+
+
 def test_mqtt_adapter_with_empty_subscribe_topics_still_starts() -> None:
     """Adapter should start even when no bus topics are configured."""
 

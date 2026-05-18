@@ -49,12 +49,25 @@ class FakeConnection:
         self.config = config
         self.connected = False
         self.disconnected = False
+        self.connect_calls = 0
+        self.reconnect_calls = 0
+        self.write_failures_remaining = 0
         self.writes: list[bytes] = []
         self.handler: Callable[[bytes], Awaitable[None] | None] | None = None
 
+    @property
+    def is_connected(self) -> bool:
+        return self.connected
+
     async def connect(self, notification_handler: Callable[[bytes], Awaitable[None] | None] | None = None) -> None:
+        self.connect_calls += 1
         self.connected = True
         self.handler = notification_handler
+
+    async def reconnect(self) -> None:
+        self.reconnect_calls += 1
+        await self.disconnect()
+        await self.connect(self.handler)
 
     async def disconnect(self) -> None:
         self.disconnected = True
@@ -62,6 +75,9 @@ class FakeConnection:
 
     async def write(self, data: bytes, *, response: bool | None = None) -> None:
         _ = response
+        if self.write_failures_remaining > 0:
+            self.write_failures_remaining -= 1
+            raise RuntimeError("write failed")
         self.writes.append(data)
 
     async def emit(self, data: bytes) -> None:
@@ -110,6 +126,59 @@ def test_start_connects_ble_subscribes_and_initializes_crypto() -> None:
         assert created_connections[0].config.address == "AA:BB:CC:DD:EE:FF"
         assert created_connections[0].config.notify_uuid == "00000003-0000-1000-8000-00805f9b34fb"
         assert bus.subscriber_count("ecoflow/powerstream/command") == 1
+
+        await adapter.stop()
+
+    asyncio.run(scenario())
+
+
+def test_maintain_loop_reconnects_after_runtime_disconnect() -> None:
+    async def scenario() -> None:
+        connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
+        crypto = FakeCrypto("SN123")
+        adapter = PowerstreamAdapter(
+            _config(poll_interval_seconds=0.01),
+            connection_factory=lambda _cfg: connection,
+            crypto_factory=lambda _serial: crypto,
+        )  # type: ignore[arg-type]
+
+        await adapter.start(EventBus())
+        adapter._rx_buffer = bytearray(b"partial")  # type: ignore[attr-defined]
+        connection.connected = False
+
+        await asyncio.sleep(0.03)
+
+        assert connection.reconnect_calls >= 1
+        assert connection.connected
+        assert adapter.health.online is True
+        assert adapter.health.detail == "running"
+        assert adapter._rx_buffer == bytearray()  # type: ignore[attr-defined]
+        assert connection.handler is not None
+
+        await adapter.stop()
+
+    asyncio.run(scenario())
+
+
+def test_maintain_loop_reconnects_after_poll_write_failure() -> None:
+    async def scenario() -> None:
+        connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
+        crypto = FakeCrypto("SN123")
+        adapter = PowerstreamAdapter(
+            _config(poll_interval_seconds=0.01),
+            connection_factory=lambda _cfg: connection,
+            crypto_factory=lambda _serial: crypto,
+        )  # type: ignore[arg-type]
+
+        await adapter.start(EventBus())
+        connection.write_failures_remaining = 1
+
+        await asyncio.sleep(0.03)
+
+        assert connection.reconnect_calls >= 1
+        assert connection.connected
+        assert adapter.health.online is True
+        assert adapter.health.detail == "running"
 
         await adapter.stop()
 
@@ -270,7 +339,7 @@ def test_authentication_skips_when_user_id_is_missing() -> None:
     asyncio.run(scenario())
 
 
-def test_authentication_failure_sets_health_and_raises() -> None:
+def test_authentication_failure_sets_health_and_keeps_maintain_loop_running() -> None:
     class FailingCrypto(FakeCrypto):
         def encode_packet(self, packet: object) -> bytes:
             raise RuntimeError("encode failed")
@@ -283,16 +352,12 @@ def test_authentication_failure_sets_health_and_raises() -> None:
             crypto_factory=lambda _serial: FailingCrypto("SN123"),
         )  # type: ignore[arg-type]
 
-        try:
-            await adapter.start(EventBus())
-        except RuntimeError as exc:
-            assert "encode failed" in str(exc)
-        else:  # pragma: no cover - defensive assertion branch
-            raise AssertionError("authentication failure should propagate")
-
+        await adapter.start(EventBus())
         assert adapter.health.online is False
         assert "start failed" in adapter.health.detail
-        assert connection.disconnected
+        assert adapter._maintain_task is not None  # type: ignore[attr-defined]
+
+        await adapter.stop()
 
     asyncio.run(scenario())
 

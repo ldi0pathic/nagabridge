@@ -74,7 +74,10 @@ def _build_ble_adapter(device: BleDeviceConfig) -> Adapter:
 
 
 def build_adapters_from_config(
-    config_path: Path = DEFAULT_CONFIG_PATH, *, log_level_override: str | None = None, log_dir: Path | None = None
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    *,
+    log_level_override: str | None = None,
+    log_dir: Path | None = None,
 ) -> list[Adapter]:
     """Build all adapters from the TOML configuration file."""
     cfg = load_config(config_path)
@@ -115,6 +118,21 @@ def build_adapters_from_config(
     return adapters
 
 
+def _register_shutdown_signal_handlers(
+    loop: asyncio.AbstractEventLoop,
+    shutdown_event: asyncio.Event,
+) -> None:
+    """Register SIGINT/SIGTERM handlers across event loop implementations."""
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, shutdown_event.set)
+        except (NotImplementedError, RuntimeError):
+            signal.signal(
+                sig,
+                lambda _signum, _frame: loop.call_soon_threadsafe(shutdown_event.set),
+            )
+
+
 async def run(
     config_path: Path = DEFAULT_CONFIG_PATH,
     *,
@@ -143,14 +161,17 @@ async def run(
     shutdown_event = asyncio.Event()
 
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, shutdown_event.set)
+    _register_shutdown_signal_handlers(loop, shutdown_event)
 
     log.info("NagaBridge startet - %d Adapter geladen", len(adapters))
 
     for adapter in adapters:
-        await adapter.start(bus)
-        log.info("Adapter gestartet: %s", adapter.name)
+        try:
+            await adapter.start(bus)
+        except Exception:
+            log.exception("Adapter start failed: %s", adapter.name)
+        else:
+            log.info("Adapter gestartet: %s", adapter.name)
 
     await bus.publish("system/nagabridge/status", {"status": "running"})
 

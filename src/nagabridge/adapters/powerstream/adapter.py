@@ -93,7 +93,8 @@ class PowerstreamAdapter(Adapter):
         self._crypto: _PowerstreamCrypto | None = None
         self._rx_buffer = bytearray()
         self._authenticated = False
-        self._poll_task: asyncio.Task[None] | None = None
+        self._maintain_task: asyncio.Task[None] | None = None
+        self._reconnect_lock = asyncio.Lock()
         self._last_state: dict[str, Any] = {}
         self._last_bat_state: dict[str, Any] = {}
 
@@ -125,22 +126,21 @@ class PowerstreamAdapter(Adapter):
         try:
             self._initialize_crypto()
             self._connection = self._connection_factory(self._connection_config())
-            await self._connection.connect(self._on_notification)
-            await self._authenticate()
-            self._poll_task = asyncio.create_task(self._poll_loop())
+            await self._connect_ble()
             self._health = HealthStatus(online=True, detail="running")
         except Exception as exc:
             self._health = HealthStatus(online=False, detail=f"start failed: {exc}")
-            await self._cleanup_connection()
-            raise
+            log.warning("PowerStream %s initial BLE start failed; maintain loop will retry: %s", self.name, exc)
+        finally:
+            self._maintain_task = asyncio.create_task(self._maintain_loop())
 
     async def stop(self) -> None:
         """Stop polling, unsubscribe from commands and close BLE connection."""
-        if self._poll_task is not None:
-            self._poll_task.cancel()
+        if self._maintain_task is not None:
+            self._maintain_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await self._poll_task
-            self._poll_task = None
+                await self._maintain_task
+            self._maintain_task = None
 
         if self._bus is not None:
             await self._bus.unsubscribe(self._config.command_topic, self._on_command)
@@ -203,14 +203,56 @@ class PowerstreamAdapter(Adapter):
         cache.update(payload)
         await self._bus.publish(target, dict(cache))
 
-    async def _poll_loop(self) -> None:
+    async def _maintain_loop(self) -> None:
         while True:
             await asyncio.sleep(self._config.poll_interval_seconds)
             try:
+                await self._ensure_ble_ready()
                 await self.request_status()
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 log.warning("PowerStream status poll failed for %s: %s", self.name, exc)
                 self._health = HealthStatus(online=False, detail=f"poll failed: {exc}")
+                await self._reconnect_after_failure(exc)
+
+    async def _connect_ble(self) -> None:
+        if self._connection is None:
+            msg = "PowerStream BLE connection is not initialized"
+            raise RuntimeError(msg)
+        self._rx_buffer = bytearray()
+        self._authenticated = False
+        await self._connection.connect(self._on_notification)
+        await self._authenticate()
+        self._health = HealthStatus(online=True, detail="running")
+
+    async def _ensure_ble_ready(self) -> None:
+        if self._connection is None:
+            msg = "PowerStream BLE connection is not initialized"
+            raise RuntimeError(msg)
+        if self._connection.is_connected:
+            return
+        msg = "PowerStream BLE connection is disconnected"
+        raise RuntimeError(msg)
+
+    async def _reconnect_after_failure(self, exc: BaseException) -> None:
+        if self._connection is None:
+            return
+        async with self._reconnect_lock:
+            if self._connection is None:
+                return
+            try:
+                log.info("Reconnecting PowerStream %s after BLE failure: %s", self.name, exc)
+                self._rx_buffer = bytearray()
+                self._authenticated = False
+                await self._connection.reconnect()
+                await self._authenticate()
+                self._health = HealthStatus(online=True, detail="running")
+            except asyncio.CancelledError:
+                raise
+            except Exception as reconnect_exc:
+                log.warning("PowerStream reconnect failed for %s: %s", self.name, reconnect_exc)
+                self._health = HealthStatus(online=False, detail=f"reconnect failed: {reconnect_exc}")
 
     async def _authenticate(self) -> None:
         """Send the PowerStream MD5 authentication packet when credentials exist."""
