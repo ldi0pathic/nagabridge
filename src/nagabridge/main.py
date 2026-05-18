@@ -166,8 +166,12 @@ async def run(
     log.info("NagaBridge startet - %d Adapter geladen", len(adapters))
 
     for adapter in adapters:
-        await adapter.start(bus)
-        log.info("Adapter gestartet: %s", adapter.name)
+        try:
+            await adapter.start(bus)
+        except Exception:
+            log.exception("Adapter start failed: %s", adapter.name)
+        else:
+            log.info("Adapter gestartet: %s", adapter.name)
 
     await bus.publish("system/nagabridge/status", {"status": "running"})
 

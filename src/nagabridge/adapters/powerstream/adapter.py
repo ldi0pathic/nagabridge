@@ -127,12 +127,12 @@ class PowerstreamAdapter(Adapter):
             self._initialize_crypto()
             self._connection = self._connection_factory(self._connection_config())
             await self._connect_ble()
-            self._maintain_task = asyncio.create_task(self._maintain_loop())
             self._health = HealthStatus(online=True, detail="running")
         except Exception as exc:
             self._health = HealthStatus(online=False, detail=f"start failed: {exc}")
-            await self._cleanup_connection()
-            raise
+            log.warning("PowerStream %s initial BLE start failed; maintain loop will retry: %s", self.name, exc)
+        finally:
+            self._maintain_task = asyncio.create_task(self._maintain_loop())
 
     async def stop(self) -> None:
         """Stop polling, unsubscribe from commands and close BLE connection."""
