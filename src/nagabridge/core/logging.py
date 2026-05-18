@@ -23,6 +23,17 @@ def _rotating_file_handler(path: Path, level: int) -> logging.handlers.TimedRota
         encoding="utf-8",
     )
     handler.suffix = ROTATE_SUFFIX
+
+    stem = path.stem
+    suffix = path.suffix
+
+    def _namer(default_name: str) -> str:
+        # default_name: /var/log/nagabridge/nagabridge.log.2026-05-03
+        # target:       /var/log/nagabridge/nagabridge.2026-05-03.log
+        date_part = default_name.rsplit(".", 1)[-1]
+        return str(path.parent / f"{stem}.{date_part}{suffix}")
+
+    handler.namer = _namer
     handler.setLevel(level)
     handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FMT))
     return handler
