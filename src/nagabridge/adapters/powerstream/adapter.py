@@ -22,8 +22,6 @@ log = logging.getLogger(__name__)
 
 UUID_WRITE = "00000002-0000-1000-8000-00805f9b34fb"
 UUID_NOTIFY = "00000003-0000-1000-8000-00805f9b34fb"
-STATE_TOPIC = "ecoflow/powerstream/state"
-COMMAND_TOPIC = "ecoflow/powerstream/command"
 DEFAULT_POLL_INTERVAL_SECONDS = 10.0
 MAX_LOAD_POWER_WATTS = 8000
 
@@ -54,22 +52,30 @@ class PowerstreamAdapterConfig:
     poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS
     reconnect_attempts: int = 3
     reconnect_backoff_seconds: float = 1.0
-    state_topic: str = STATE_TOPIC
-    command_topic: str = COMMAND_TOPIC
+    domain: str = "ecoflow"
+    state_topic: str = ""
+    command_topic: str = ""
+    bat_state_topic: str = ""
     write_with_response: bool = False
 
     @classmethod
     def from_ble_device(cls, config: BleDeviceConfig) -> PowerstreamAdapterConfig:
         """Build adapter config from the generic BLE device config."""
+        from nagabridge.core.topics import bat_state_topic, command_topic, state_topic
+
         return cls(
             name=config.name,
             mac=config.mac,
+            domain=config.domain,
             serial_number=config.serial_number,
             user_id=config.user_id,
             poll_interval_seconds=config.poll_interval_seconds or DEFAULT_POLL_INTERVAL_SECONDS,
             reconnect_attempts=config.reconnect_attempts or 3,
             reconnect_backoff_seconds=config.reconnect_backoff_seconds if config.reconnect_backoff_seconds is not None else 1.0,
             write_with_response=bool(config.write_with_response),
+            state_topic=state_topic(config.domain, config.name),
+            command_topic=command_topic(config.domain, config.name),
+            bat_state_topic=bat_state_topic(config.domain, config.name),
         )
 
 
@@ -112,6 +118,11 @@ class PowerstreamAdapter(Adapter):
     def health(self) -> HealthStatus:
         """Expose current adapter health state."""
         return self._health
+
+    @property
+    def published_topics(self) -> list[str]:
+        """Return state topics published by this adapter."""
+        return [self._config.state_topic, self._config.bat_state_topic]
 
     async def start(self, bus: EventBus) -> None:
         """Start command handling, BLE connection and polling when configured."""
@@ -188,7 +199,7 @@ class PowerstreamAdapter(Adapter):
                 if packet.cmd_set == 0x14 and packet.cmd_id == 0x01:
                     await self._publish_state(parse(packet.payload))
                 elif packet.cmd_set == 0x14 and packet.cmd_id == 0x04:
-                    await self._publish_state(parse_type2(packet.payload), "ecoflow/powerstream/bat_state")
+                    await self._publish_state(parse_type2(packet.payload), self._config.bat_state_topic)
                 else:
                     log.debug("Unhandled packet src=0x%02x cmd_set=0x%02x cmd_id=0x%02x", packet.src, packet.cmd_set, packet.cmd_id)
         except Exception as exc:

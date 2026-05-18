@@ -25,6 +25,7 @@ class BleDeviceConfig:
     name: str
     mac: str
     type: Literal["powerstream", "delta2max", "delta2"]
+    domain: str = "ecoflow"
     serial_number: str | None = None
     user_id: str | None = None
     poll_interval_seconds: float | None = None
@@ -117,6 +118,7 @@ def _parse_ble_device(device_data: dict[str, object], idx: int) -> BleDeviceConf
         name=name,
         mac=mac,
         type=typed_device_type,
+        domain=str(device_data.get("domain", "ecoflow")),
         serial_number=_optional_str(device_data.get("serial_number")),
         user_id=_optional_str(device_data.get("user_id")),
         poll_interval_seconds=_optional_positive_float(device_data.get("poll_interval_seconds"), "poll_interval_seconds"),

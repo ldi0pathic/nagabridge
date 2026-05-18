@@ -20,6 +20,11 @@ class Adapter(ABC):
         raise NotImplementedError
 
     @property
+    def published_topics(self) -> list[str]:
+        """Return bus topics this adapter publishes state on."""
+        return []
+
+    @property
     @abstractmethod
     def version(self) -> str:
         """Return adapter implementation version."""

@@ -213,10 +213,11 @@ def test_build_adapters_from_config_includes_expected_names(tmp_path: Path) -> N
 
     mqtt = next(adapter for adapter in adapters if isinstance(adapter, MqttAdapter))
     assert mqtt._config.publish_prefix == "nagabridge"  # type: ignore[attr-defined]
-    assert mqtt._config.subscribe_topics == [  # type: ignore[attr-defined]
+    assert set(mqtt._config.subscribe_topics) == {  # type: ignore[attr-defined]
         "ecoflow/powerstream/state",
         "ecoflow/powerstream/bat_state",
-    ]
+        "ecoflow/delta2/state",
+    }
 
 
 def test_run_starts_and_stops_cleanly(
