@@ -339,7 +339,7 @@ def test_authentication_skips_when_user_id_is_missing() -> None:
     asyncio.run(scenario())
 
 
-def test_authentication_failure_sets_health_and_raises() -> None:
+def test_authentication_failure_sets_health_and_keeps_maintain_loop_running() -> None:
     class FailingCrypto(FakeCrypto):
         def encode_packet(self, packet: object) -> bytes:
             raise RuntimeError("encode failed")
@@ -352,16 +352,12 @@ def test_authentication_failure_sets_health_and_raises() -> None:
             crypto_factory=lambda _serial: FailingCrypto("SN123"),
         )  # type: ignore[arg-type]
 
-        try:
-            await adapter.start(EventBus())
-        except RuntimeError as exc:
-            assert "encode failed" in str(exc)
-        else:  # pragma: no cover - defensive assertion branch
-            raise AssertionError("authentication failure should propagate")
-
+        await adapter.start(EventBus())
         assert adapter.health.online is False
         assert "start failed" in adapter.health.detail
-        assert connection.disconnected
+        assert adapter._maintain_task is not None  # type: ignore[attr-defined]
+
+        await adapter.stop()
 
     asyncio.run(scenario())
 

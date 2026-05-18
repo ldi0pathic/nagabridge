@@ -9,8 +9,10 @@ import pytest
 from nagabridge.adapters.delta2.adapter import Delta2Adapter
 from nagabridge.adapters.mqtt.adapter import MqttAdapter
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
+from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
+from nagabridge.core.health import HealthStatus
 from nagabridge.main import (
     DEFAULT_CONFIG_PATH,
     EXIT_CONFIG_ACTION_REQUIRED,
@@ -62,6 +64,67 @@ class FakeMqttClient:
         _ = payload
         _ = qos
         _ = retain
+
+
+class FailingStartAdapter(Adapter):
+    """Test adapter that fails during start but can still be stopped."""
+
+    def __init__(self, name: str = "failing") -> None:
+        self._name = name
+        self._health = HealthStatus()
+        self.stop_called = False
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def version(self) -> str:
+        return "test"
+
+    @property
+    def health(self) -> HealthStatus:
+        return self._health
+
+    async def start(self, bus: EventBus) -> None:
+        _ = bus
+        self._health = HealthStatus(online=False, detail="start failed")
+        raise RuntimeError("boom")
+
+    async def stop(self) -> None:
+        self.stop_called = True
+        self._health = HealthStatus(online=False, detail="stopped")
+
+
+class HealthyAdapter(Adapter):
+    """Test adapter that starts and stops cleanly."""
+
+    def __init__(self, name: str = "healthy") -> None:
+        self._name = name
+        self._health = HealthStatus()
+        self.start_called = False
+        self.stop_called = False
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def version(self) -> str:
+        return "test"
+
+    @property
+    def health(self) -> HealthStatus:
+        return self._health
+
+    async def start(self, bus: EventBus) -> None:
+        _ = bus
+        self.start_called = True
+        self._health = HealthStatus(online=True, detail="running")
+
+    async def stop(self) -> None:
+        self.stop_called = True
+        self._health = HealthStatus(online=False, detail="stopped")
 
 
 def _write_config(tmp_path: Path) -> Path:
@@ -188,6 +251,40 @@ def test_run_starts_and_stops_cleanly(
             _register_shutdown,
         )
         await run(config, log_dir=log_dir)
+
+    asyncio.run(scenario())
+
+
+def test_run_continues_when_an_adapter_fails_during_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`run` should keep running when one adapter fails during startup."""
+
+    async def scenario() -> None:
+        failing = FailingStartAdapter()
+        healthy = HealthyAdapter()
+
+        def _register_shutdown(
+            loop: asyncio.AbstractEventLoop,
+            shutdown_event: asyncio.Event,
+        ) -> None:
+            loop.call_soon(shutdown_event.set)
+
+        monkeypatch.setattr(
+            "nagabridge.main.build_adapters_from_config",
+            lambda *args, **kwargs: [failing, healthy],
+        )
+        monkeypatch.setattr(
+            "nagabridge.main._register_shutdown_signal_handlers",
+            _register_shutdown,
+        )
+
+        await run(tmp_path / "unused.toml", log_dir=tmp_path / "logs")
+
+        assert healthy.start_called is True
+        assert healthy.stop_called is True
+        assert failing.stop_called is True
 
     asyncio.run(scenario())
 
