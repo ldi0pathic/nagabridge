@@ -199,8 +199,8 @@ def test_start_without_serial_keeps_legacy_lifecycle_without_ble() -> None:
 
         await adapter.start(bus)
 
-        assert adapter.health.online
-        assert adapter.health.detail == "running"
+        assert adapter.health.online is False
+        assert adapter.health.detail == "no serial number configured"
         assert bus.subscriber_count("ecoflow/powerstream/command") == 1
 
         await adapter.stop()

@@ -21,6 +21,7 @@ from nagabridge.main import (
     parse_args,
     run,
 )
+from tests.adapters.powerstream.test_adapter import FakeConnection, FakeCrypto
 
 
 class FakeMqttClient:
@@ -294,7 +295,9 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
     """Adapters should be offline after simulated shutdown."""
     adapters = [
         PowerstreamAdapter(
-            BleDeviceConfig("Powerstream", "AA:BB:CC:DD:EE:FF", "powerstream"),
+            BleDeviceConfig("Powerstream", "AA:BB:CC:DD:EE:FF", "powerstream", serial_number="SN123"),
+            connection_factory=lambda cfg: FakeConnection(cfg),
+            crypto_factory=lambda _sn: FakeCrypto("SN123"),
         ),
         Delta2Adapter(BleDeviceConfig("Delta2", "AA:BB:CC:DD:EE:FE", "delta2")),
     ]
