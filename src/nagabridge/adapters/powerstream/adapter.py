@@ -131,7 +131,7 @@ class PowerstreamAdapter(Adapter):
 
         if not self._config.serial_number:
             log.info("PowerStream %s has no serial number configured; BLE connection is deferred", self.name)
-            self._health = HealthStatus(online=True, detail="running")
+            self._health = HealthStatus(online=False, detail="no serial number configured")
             return
 
         try:
@@ -142,8 +142,8 @@ class PowerstreamAdapter(Adapter):
         except Exception as exc:
             self._health = HealthStatus(online=False, detail=f"start failed: {exc}")
             log.warning("PowerStream %s initial BLE start failed; maintain loop will retry: %s", self.name, exc)
-        finally:
-            self._maintain_task = asyncio.create_task(self._maintain_loop())
+
+        self._maintain_task = asyncio.create_task(self._maintain_loop())
 
     async def stop(self) -> None:
         """Stop polling, unsubscribe from commands and close BLE connection."""
@@ -250,8 +250,6 @@ class PowerstreamAdapter(Adapter):
         if self._connection is None:
             return
         async with self._reconnect_lock:
-            if self._connection is None:
-                return
             try:
                 log.info("Reconnecting PowerStream %s after BLE failure: %s", self.name, exc)
                 self._rx_buffer = bytearray()
