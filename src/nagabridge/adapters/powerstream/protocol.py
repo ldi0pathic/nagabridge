@@ -300,6 +300,8 @@ class Type1Crypto:
             try:
                 decrypted = self.decrypt(encrypted_body)
                 packets.append(Packet.from_bytes(header + decrypted[:body_len], xor_payload=True))
+            except ValueError as exc:
+                log.debug("Type1 decode error, skipping packet (%s): %s", type(exc).__name__, exc)
             except Exception as exc:
                 log.warning("Type1 decode error (%s): %s", type(exc).__name__, exc)
 
