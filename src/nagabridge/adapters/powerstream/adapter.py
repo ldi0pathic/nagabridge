@@ -41,7 +41,7 @@ class _PowerstreamCrypto(Protocol):
         ...
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class PowerstreamAdapterConfig:
     """Runtime configuration for the PowerStream adapter core."""
 
@@ -53,15 +53,29 @@ class PowerstreamAdapterConfig:
     reconnect_attempts: int = 3
     reconnect_backoff_seconds: float = 1.0
     domain: str = "ecoflow"
-    state_topic: str = ""
-    command_topic: str = ""
-    bat_state_topic: str = ""
     write_with_response: bool = False
+
+    @property
+    def state_topic(self) -> str:
+        from nagabridge.core.topics import state_topic
+
+        return state_topic(self.domain, self.name)
+
+    @property
+    def command_topic(self) -> str:
+        from nagabridge.core.topics import command_topic
+
+        return command_topic(self.domain, self.name)
+
+    @property
+    def bat_state_topic(self) -> str:
+        from nagabridge.core.topics import bat_state_topic
+
+        return bat_state_topic(self.domain, self.name)
 
     @classmethod
     def from_ble_device(cls, config: BleDeviceConfig) -> PowerstreamAdapterConfig:
         """Build adapter config from the generic BLE device config."""
-        from nagabridge.core.topics import bat_state_topic, command_topic, state_topic
 
         return cls(
             name=config.name,
@@ -73,9 +87,6 @@ class PowerstreamAdapterConfig:
             reconnect_attempts=config.reconnect_attempts or 3,
             reconnect_backoff_seconds=config.reconnect_backoff_seconds if config.reconnect_backoff_seconds is not None else 1.0,
             write_with_response=bool(config.write_with_response),
-            state_topic=state_topic(config.domain, config.name),
-            command_topic=command_topic(config.domain, config.name),
-            bat_state_topic=bat_state_topic(config.domain, config.name),
         )
 
 

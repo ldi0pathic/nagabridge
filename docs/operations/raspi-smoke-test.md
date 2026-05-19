@@ -51,6 +51,6 @@ PYTHONPATH=src pytest -q tests/test_mqtt_adapter.py -k integration
 - `test_mqtt_adapter_forwards_bus_events_with_fake_client` ist grün
 - Optional: Integrationstest gegen realen Broker ist grün
 - Subscriber sieht Topic `nagabridge/ecoflow/powerstream/state`
-- PowerStream Battery-State wird auf `nagabridge/ecoflow/powerstream/bat_state` publiziert
+- PowerStream Battery-State wird auf `nagabridge/ecoflow/powerstream_battery/state` publiziert
 - ioBroker zeigt die MQTT-Topics als `mqtt.0.nagabridge.ecoflow.powerstream.state`
-  und `mqtt.0.nagabridge.ecoflow.powerstream.bat_state`
+  und `mqtt.0.nagabridge.ecoflow.powerstream_battery.state`
