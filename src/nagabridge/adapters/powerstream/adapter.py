@@ -114,6 +114,7 @@ class PowerstreamAdapter(Adapter):
         self._reconnect_lock = asyncio.Lock()
         self._last_state: dict[str, Any] = {}
         self._last_bat_state: dict[str, Any] = {}
+        self._auth_event: asyncio.Event | None = None
 
     @property
     def name(self) -> str:
@@ -211,9 +212,16 @@ class PowerstreamAdapter(Adapter):
                     await self._publish_state(parse(packet.payload))
                 elif packet.cmd_set == 0x14 and packet.cmd_id == 0x04:
                     await self._publish_state(parse_type2(packet.payload), self._config.bat_state_topic)
+                elif packet.cmd_set == 0x35 and packet.cmd_id == 0x86:
+                    if self._auth_event is not None:
+                        self._auth_event.set()
+                    else:
+                        log.debug("Auth response received outside auth flow")
+                elif packet.cmd_set == 0x14 and packet.cmd_id == 0x86:
+                    log.debug("PowerStream %s ignoring inv_power_pack (historic data, not relevant)", self.name)
                 else:
                     log.warning(
-                        "[HIER]Unhandled packet src=0x%02x cmd_set=0x%02x cmd_id=0x%02x payload=%s",
+                        "Unhandled packet src=0x%02x cmd_set=0x%02x cmd_id=0x%02x payload=%s",
                         packet.src,
                         packet.cmd_set,
                         packet.cmd_id,
@@ -288,7 +296,6 @@ class PowerstreamAdapter(Adapter):
         if not self._config.user_id:
             log.info("PowerStream %s has no user_id configured; authentication is skipped", self.name)
             return
-
         try:
             from .protocol import COMMAND_ID_AUTH, COMMAND_ID_AUTH_STATUS, COMMAND_SET_AUTH, build_auth_md5
 
@@ -296,8 +303,17 @@ class PowerstreamAdapter(Adapter):
             if len(auth_payload) != 32:
                 msg = "PowerStream auth MD5 payload must be 32 ASCII bytes"
                 raise ValueError(msg)
+
+            self._auth_event = asyncio.Event()
             await self._write_packet(COMMAND_SET_AUTH, COMMAND_ID_AUTH_STATUS, b"", dsrc=0x01, ddst=0x01)
-            await asyncio.sleep(1)
+            try:
+                await asyncio.wait_for(self._auth_event.wait(), timeout=5.0)
+                log.debug("PowerStream %s auth status response received", self.name)
+            except TimeoutError:
+                log.warning("PowerStream %s auth status response timed out, proceeding anyway", self.name)
+            finally:
+                self._auth_event = None
+
             await self._write_packet(COMMAND_SET_AUTH, COMMAND_ID_AUTH, auth_payload, dsrc=0x01, ddst=0x01)
             self._authenticated = True
             log.info("PowerStream %s authentication packet sent", self.name)
