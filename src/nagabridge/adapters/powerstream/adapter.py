@@ -212,7 +212,13 @@ class PowerstreamAdapter(Adapter):
                 elif packet.cmd_set == 0x14 and packet.cmd_id == 0x04:
                     await self._publish_state(parse_type2(packet.payload), self._config.bat_state_topic)
                 else:
-                    log.debug("Unhandled packet src=0x%02x cmd_set=0x%02x cmd_id=0x%02x", packet.src, packet.cmd_set, packet.cmd_id)
+                    log.warning(
+                        "[HIER]Unhandled packet src=0x%02x cmd_set=0x%02x cmd_id=0x%02x payload=%s",
+                        packet.src,
+                        packet.cmd_set,
+                        packet.cmd_id,
+                        packet.payload.hex(),
+                    )
         except Exception as exc:
             log.exception("PowerStream notification handling failed")
             self._health = HealthStatus(online=False, detail=f"notification failed: {exc}")
