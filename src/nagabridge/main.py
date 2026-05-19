@@ -7,6 +7,7 @@ import asyncio
 import logging
 import signal
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -51,6 +52,13 @@ log_level = "INFO"
 """
 
 
+_ADAPTER_FACTORIES: dict[str, Callable[[BleDeviceConfig], Adapter]] = {
+    "powerstream": PowerstreamAdapter,
+    "delta2": Delta2Adapter,
+    "delta2max": Delta2MaxAdapter,
+}
+
+
 def ensure_default_config(path: Path) -> bool:
     """Create a default config file when none exists."""
     if path.exists():
@@ -62,15 +70,11 @@ def ensure_default_config(path: Path) -> bool:
 
 
 def _build_ble_adapter(device: BleDeviceConfig) -> Adapter:
-    """Create a BLE adapter instance for a configured device."""
-    if device.type == "powerstream":
-        return PowerstreamAdapter(device)
-    if device.type == "delta2":
-        return Delta2Adapter(device)
-    if device.type == "delta2max":
-        return Delta2MaxAdapter(device)
-    msg = f"Unsupported device type '{device.type}'"
-    raise ValueError(msg)
+    factory = _ADAPTER_FACTORIES.get(device.type)
+    if factory is None:
+        msg = f"Unsupported device type '{device.type}'"
+        raise ValueError(msg)
+    return factory(device)
 
 
 def build_adapters_from_config(

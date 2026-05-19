@@ -47,14 +47,14 @@ Nach ADR-002 verwendet der Adapter schlanke Payloads und den Typ über den Topic
 | Topic | Richtung | Beschreibung |
 |---|---|---|
 | `ecoflow/powerstream/state` | Adapter → Bus | Aktueller Gerätezustand als flaches Dictionary |
-| `ecoflow/powerstream/bat_state` | Adapter → Bus | Battery-State aus PowerPack/Type2-Payloads |
+| `ecoflow/powerstream_battery/state` | Adapter → Bus | Battery-State aus PowerPack/Type2-Payloads |
 | `ecoflow/powerstream/command` | Bus → Adapter | Steuerbefehle |
 
 Der MQTT-Adapter exportiert Bus-Topics mit dem Prefix `nagabridge`.
 Damit entstehen auf dem Broker `nagabridge/ecoflow/powerstream/state`
-und `nagabridge/ecoflow/powerstream/bat_state`. In ioBroker erscheinen
+und `nagabridge/ecoflow/powerstream_battery/state`. In ioBroker erscheinen
 diese Pfade entsprechend als `mqtt.0.nagabridge.ecoflow.powerstream.state`
-und `mqtt.0.nagabridge.ecoflow.powerstream.bat_state`.
+und `mqtt.0.nagabridge.ecoflow.powerstream_battery.state`.
 
 Beispiel-State:
 

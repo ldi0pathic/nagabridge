@@ -21,6 +21,7 @@ from nagabridge.main import (
     parse_args,
     run,
 )
+from tests.adapters.powerstream.test_adapter import FakeConnection, FakeCrypto
 
 
 class FakeMqttClient:
@@ -215,7 +216,7 @@ def test_build_adapters_from_config_includes_expected_names(tmp_path: Path) -> N
     assert mqtt._config.publish_prefix == "nagabridge"  # type: ignore[attr-defined]
     assert set(mqtt._config.subscribe_topics) == {  # type: ignore[attr-defined]
         "ecoflow/powerstream/state",
-        "ecoflow/powerstream/bat_state",
+        "ecoflow/powerstream_battery/state",
         "ecoflow/delta2/state",
     }
 
@@ -294,7 +295,9 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
     """Adapters should be offline after simulated shutdown."""
     adapters = [
         PowerstreamAdapter(
-            BleDeviceConfig("Powerstream", "AA:BB:CC:DD:EE:FF", "powerstream"),
+            BleDeviceConfig("Powerstream", "AA:BB:CC:DD:EE:FF", "powerstream", serial_number="SN123"),
+            connection_factory=lambda cfg: FakeConnection(cfg),
+            crypto_factory=lambda _sn: FakeCrypto("SN123"),
         ),
         Delta2Adapter(BleDeviceConfig("Delta2", "AA:BB:CC:DD:EE:FE", "delta2")),
     ]

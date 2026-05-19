@@ -7,11 +7,11 @@ from nagabridge.adapters.delta2max.adapter import Delta2MaxAdapter
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
+from tests.adapters.powerstream.test_adapter import FakeConnection, FakeCrypto
 
 
-def _cfg(name: str, type_: str) -> BleDeviceConfig:
-    """Build a deterministic BLE config for tests."""
-    return BleDeviceConfig(name=name, mac="AA:BB:CC:DD:EE:FF", type=type_)
+def _cfg(name: str, type_: str, serial_number: str | None = None) -> BleDeviceConfig:
+    return BleDeviceConfig(name=name, mac="AA:BB:CC:DD:EE:FF", type=type_, serial_number=serial_number)
 
 
 def _ensure(condition: object, message: str) -> None:
@@ -25,7 +25,13 @@ def test_stub_adapter_lifecycle_health_states() -> None:
 
     async def scenario() -> None:
         bus = EventBus()
-        adapters = [PowerstreamAdapter(_cfg("Powerstream", "powerstream"))]
+        adapters = [
+            PowerstreamAdapter(
+                _cfg("Powerstream", "powerstream", serial_number="SN123"),
+                connection_factory=lambda cfg: FakeConnection(cfg),
+                crypto_factory=lambda _sn: FakeCrypto("SN123"),
+            )
+        ]
 
         for adapter in adapters:
             _ensure(adapter.health.online is False, "Adapter must start offline")

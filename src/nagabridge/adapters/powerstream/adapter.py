@@ -41,7 +41,7 @@ class _PowerstreamCrypto(Protocol):
         ...
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class PowerstreamAdapterConfig:
     """Runtime configuration for the PowerStream adapter core."""
 
@@ -53,15 +53,29 @@ class PowerstreamAdapterConfig:
     reconnect_attempts: int = 3
     reconnect_backoff_seconds: float = 1.0
     domain: str = "ecoflow"
-    state_topic: str = ""
-    command_topic: str = ""
-    bat_state_topic: str = ""
     write_with_response: bool = False
+
+    @property
+    def state_topic(self) -> str:
+        from nagabridge.core.topics import state_topic
+
+        return state_topic(self.domain, self.name)
+
+    @property
+    def command_topic(self) -> str:
+        from nagabridge.core.topics import command_topic
+
+        return command_topic(self.domain, self.name)
+
+    @property
+    def bat_state_topic(self) -> str:
+        from nagabridge.core.topics import bat_state_topic
+
+        return bat_state_topic(self.domain, self.name)
 
     @classmethod
     def from_ble_device(cls, config: BleDeviceConfig) -> PowerstreamAdapterConfig:
         """Build adapter config from the generic BLE device config."""
-        from nagabridge.core.topics import bat_state_topic, command_topic, state_topic
 
         return cls(
             name=config.name,
@@ -73,9 +87,6 @@ class PowerstreamAdapterConfig:
             reconnect_attempts=config.reconnect_attempts or 3,
             reconnect_backoff_seconds=config.reconnect_backoff_seconds if config.reconnect_backoff_seconds is not None else 1.0,
             write_with_response=bool(config.write_with_response),
-            state_topic=state_topic(config.domain, config.name),
-            command_topic=command_topic(config.domain, config.name),
-            bat_state_topic=bat_state_topic(config.domain, config.name),
         )
 
 
@@ -131,7 +142,7 @@ class PowerstreamAdapter(Adapter):
 
         if not self._config.serial_number:
             log.info("PowerStream %s has no serial number configured; BLE connection is deferred", self.name)
-            self._health = HealthStatus(online=True, detail="running")
+            self._health = HealthStatus(online=False, detail="no serial number configured")
             return
 
         try:
@@ -142,8 +153,8 @@ class PowerstreamAdapter(Adapter):
         except Exception as exc:
             self._health = HealthStatus(online=False, detail=f"start failed: {exc}")
             log.warning("PowerStream %s initial BLE start failed; maintain loop will retry: %s", self.name, exc)
-        finally:
-            self._maintain_task = asyncio.create_task(self._maintain_loop())
+
+        self._maintain_task = asyncio.create_task(self._maintain_loop())
 
     async def stop(self) -> None:
         """Stop polling, unsubscribe from commands and close BLE connection."""
@@ -250,8 +261,6 @@ class PowerstreamAdapter(Adapter):
         if self._connection is None:
             return
         async with self._reconnect_lock:
-            if self._connection is None:
-                return
             try:
                 log.info("Reconnecting PowerStream %s after BLE failure: %s", self.name, exc)
                 self._rx_buffer = bytearray()

@@ -76,7 +76,7 @@ def test_mqtt_adapter_forwards_bus_events_with_fake_client() -> None:
         fake_client = FakeMqttClient()
 
         adapter = MqttAdapter(
-            MqttAdapterConfig(host="broker.local"),
+            MqttAdapterConfig(host="broker.local", subscribe_topics=["ecoflow/powerstream/state"]),
             client_factory=lambda: fake_client,
         )
 
@@ -128,19 +128,19 @@ def test_mqtt_adapter_forwards_battery_state_by_default() -> None:
         bus = EventBus()
         fake_client = FakeMqttClient()
         adapter = MqttAdapter(
-            MqttAdapterConfig(host="broker.local"),
+            MqttAdapterConfig(host="broker.local", subscribe_topics=["ecoflow/powerstream_battery/state"]),
             client_factory=lambda: fake_client,
         )
 
         await adapter.start(bus)
-        await bus.publish("ecoflow/powerstream/bat_state", {"soc": 80})
+        await bus.publish("ecoflow/powerstream_battery/state", {"soc": 80})
         await asyncio.sleep(0)
 
         _ensure(
             fake_client.published
             == [
                 (
-                    "nagabridge/ecoflow/powerstream/bat_state",
+                    "nagabridge/ecoflow/powerstream_battery/state",
                     json.dumps({"soc": 80}),
                     0,
                     False,

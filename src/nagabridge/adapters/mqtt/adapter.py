@@ -35,12 +35,7 @@ class MqttAdapterConfig:
     port: int = 1883
     user: str | None = None
     password: str | None = None
-    subscribe_topics: list[str] = field(
-        default_factory=lambda: [
-            "ecoflow/powerstream/state",
-            "ecoflow/powerstream/bat_state",
-        ],
-    )
+    subscribe_topics: list[str] = field(default_factory=list)
     publish_prefix: str = "nagabridge"
 
 
