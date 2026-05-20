@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class HealthState(Enum):
@@ -32,3 +33,11 @@ class HealthStatus:
     @property
     def is_failed(self) -> bool:
         return self.state == HealthState.failed
+
+    def to_payload(self, name: str) -> dict[str, Any]:
+        return {
+            "adapter": name,
+            "state": self.state.value,
+            "detail": self.detail,
+            "timestamp": self.timestamp,
+        }

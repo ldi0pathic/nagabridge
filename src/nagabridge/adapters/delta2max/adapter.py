@@ -1,9 +1,14 @@
 """Delta 2 Max adapter implementation."""
 
+import logging
+
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthState, HealthStatus
+from nagabridge.core.topics import health_topic
+
+log = logging.getLogger(__name__)
 
 
 class Delta2MaxAdapter(Adapter):
@@ -13,6 +18,7 @@ class Delta2MaxAdapter(Adapter):
         """Initialize the adapter with BLE device configuration."""
         self._config = config
         self._health = HealthStatus()
+        self._bus: EventBus | None = None
 
     @property
     def name(self) -> str:
@@ -31,8 +37,9 @@ class Delta2MaxAdapter(Adapter):
 
     async def start(self, bus: EventBus) -> None:
         """Start the adapter lifecycle."""
-        _ = bus
+        self._bus = bus
         self._health = HealthStatus(state=HealthState.degraded, detail="not implemented")
+        await self._publish_health()
 
     @property
     def published_topics(self) -> list[str]:
@@ -41,6 +48,16 @@ class Delta2MaxAdapter(Adapter):
 
         return [state_topic(self._config.domain, self._config.name)]
 
+    async def _publish_health(self) -> None:
+        if self._bus is None:
+            return
+        try:
+            await self._bus.publish(health_topic(self.name), self._health.to_payload(self.name))
+        except Exception:
+            log.exception("Failed to publish health for %s", self.name)
+
     async def stop(self) -> None:
         """Stop the adapter lifecycle."""
         self._health = HealthStatus(state=HealthState.failed, detail="stopped")
+        await self._publish_health()
+        self._bus = None

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import signal
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -134,6 +136,25 @@ def _register_shutdown_signal_handlers(
             )
 
 
+async def _health_monitor(
+    bus: EventBus,
+    adapters: list[Adapter],
+    shutdown_event: asyncio.Event,
+    interval: float = 30.0,
+) -> None:
+    while not shutdown_event.is_set():
+        states = {a.name: a.health.state.value for a in adapters}
+        overall = "ok" if all(s == "ok" for s in states.values()) else ("failed" if any(s == "failed" for s in states.values()) else "degraded")
+        await bus.publish(
+            "system/health/overall",
+            {"state": overall, "adapters": states, "timestamp": time.monotonic()},
+        )
+        try:
+            await asyncio.wait_for(asyncio.shield(shutdown_event.wait()), timeout=interval)
+        except TimeoutError:
+            pass
+
+
 async def run(
     config_path: Path = DEFAULT_CONFIG_PATH,
     *,
@@ -174,12 +195,19 @@ async def run(
         else:
             log.info("Adapter gestartet: %s", adapter.name)
 
+    monitor_task = asyncio.create_task(_health_monitor(bus, adapters, shutdown_event))
+
     await bus.publish("system/nagabridge/status", {"status": "running"})
 
     log.info("NagaBridge läuft. Warte auf SIGINT/SIGTERM...")
     await shutdown_event.wait()
 
     log.info("Shutdown eingeleitet...")
+
+    monitor_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await monitor_task
+
     await bus.publish("system/nagabridge/shutdown", {"reason": "signal"})
 
     for adapter in reversed(adapters):
