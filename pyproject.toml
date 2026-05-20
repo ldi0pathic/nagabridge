@@ -13,6 +13,9 @@ dependencies = [
     "protobuf>=4.25.0",
 ]
 
+[project.scripts]
+nagabridge = "nagabridge.main:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

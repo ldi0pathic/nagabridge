@@ -268,3 +268,50 @@ reconnect_attempts = "drei"
 
     with pytest.raises(ConfigError):
         load_config(path)
+
+
+def test_load_config_updates_defaults_when_section_missing(tmp_path: Path) -> None:
+    """Missing [updates] block should use default values."""
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+""",
+    )
+
+    cfg = load_config(path)
+    _ensure(cfg.updates.trigger == "hourly", "Default trigger should be hourly")
+    _ensure(cfg.updates.check_only_if == "any_device_online", "Default check_only_if should be any_device_online")
+
+
+def test_load_config_updates_explicit_values(tmp_path: Path) -> None:
+    """Explicit [updates] values should be parsed correctly."""
+    path = _write(
+        tmp_path,
+        """
+[updates]
+trigger = "manual"
+check_only_if = "always"
+""",
+    )
+
+    cfg = load_config(path)
+    _ensure(cfg.updates.trigger == "manual", "trigger should be manual")
+    _ensure(cfg.updates.check_only_if == "always", "check_only_if should be always")
+
+
+def test_load_config_updates_rejects_invalid_trigger(tmp_path: Path) -> None:
+    """Unknown updates.trigger value should raise ConfigError."""
+    path = _write(
+        tmp_path,
+        """
+[updates]
+trigger = "weekly"
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)

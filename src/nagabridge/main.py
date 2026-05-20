@@ -18,6 +18,7 @@ from nagabridge.adapters.delta2max.adapter import Delta2MaxAdapter
 from nagabridge.adapters.mqtt.adapter import MqttAdapter, MqttAdapterConfig
 from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
 from nagabridge.core.bus import EventBus
+from nagabridge.core.config import VALID_DEVICE_TYPES as _VDT
 from nagabridge.core.config import BleDeviceConfig, ConfigError, load_config
 from nagabridge.core.logging import configure_logging
 
@@ -39,6 +40,11 @@ log_level = "INFO"
 # host = "192.168.1.10"
 # port = 1883
 
+# Update-Verhalten (optional)
+# [updates]
+# trigger = "hourly"               # hourly | daily | manual
+# check_only_if = "any_device_online"  # any_device_online | always
+
 [adapters]
 # Add one block per BLE device
 # [[adapters.ble_device]]
@@ -59,6 +65,11 @@ _ADAPTER_FACTORIES: dict[str, Callable[[BleDeviceConfig], Adapter]] = {
     "delta2": Delta2Adapter,
     "delta2max": Delta2MaxAdapter,
 }
+
+assert set(_ADAPTER_FACTORIES.keys()) == _VDT, (
+    f"_ADAPTER_FACTORIES und VALID_DEVICE_TYPES sind nicht synchron: {set(_ADAPTER_FACTORIES.keys())} vs {_VDT}"
+)
+del _VDT
 
 
 def ensure_default_config(path: Path) -> bool:
