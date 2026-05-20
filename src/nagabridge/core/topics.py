@@ -18,3 +18,7 @@ def command_topic(domain: str, name: str) -> str:
 
 def bat_state_topic(domain: str, name: str) -> str:
     return f"{domain}/{normalize_entity(name)}_battery/state"
+
+
+def health_topic(name: str) -> str:
+    return f"system/health/{normalize_entity(name)}"

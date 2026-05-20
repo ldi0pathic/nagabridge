@@ -1,6 +1,7 @@
 """MQTT adapter that forwards bus events to a broker."""
 
 import json
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -9,6 +10,9 @@ from typing import Protocol, cast
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.health import HealthState, HealthStatus
+from nagabridge.core.topics import health_topic
+
+log = logging.getLogger(__name__)
 
 
 class _SupportsMqttClient(Protocol):
@@ -95,6 +99,7 @@ class MqttAdapter(Adapter):
             state=HealthState.ok,
             detail=f"connected to {self._config.host}:{self._config.port}",
         )
+        await self._publish_health()
 
     async def stop(self) -> None:
         """Disconnect from MQTT and unsubscribe from bus topics."""
@@ -107,8 +112,17 @@ class MqttAdapter(Adapter):
             self._client.disconnect()
 
         self._health = HealthStatus(state=HealthState.failed, detail="stopped")
+        await self._publish_health()
         self._client = None
         self._bus = None
+
+    async def _publish_health(self) -> None:
+        if self._bus is None:
+            return
+        try:
+            await self._bus.publish(health_topic(self.name), self._health.to_payload(self.name))
+        except Exception:
+            log.exception("Failed to publish health for %s", self.name)
 
     async def _on_bus_event(self, topic: Topic, payload: Payload) -> None:
         """Publish incoming bus events to MQTT."""
