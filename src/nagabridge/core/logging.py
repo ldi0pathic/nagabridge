@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import logging.handlers
 from pathlib import Path
@@ -9,33 +10,31 @@ from pathlib import Path
 LOG_DIR = Path("/var/log/nagabridge")
 LOG_FORMAT = "%(asctime)s [%(levelname)-5s] [%(name)-12s] %(message)s"
 LOG_DATE_FMT = "%Y-%m-%d %H:%M:%S"
-ROTATE_SUFFIX = "%Y-%m-%d"
-BACKUP_COUNT = 7  # one week
 
 
-def _rotating_file_handler(path: Path, level: int) -> logging.handlers.TimedRotatingFileHandler:
-    """Create a daily-rotating file handler for *path*."""
+class _ShortNameFormatter(logging.Formatter):
+    """Formatter that shows only the last dotted segment of the logger name.
+
+    Turns "nagabridge.adapters.powerstream.powerstream" into "powerstream"
+    so the name column in the log output stays within 12 chars.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        record = copy.copy(record)
+        record.name = record.name.rsplit(".", 1)[-1]
+        return super().format(record)
+
+
+def _file_handler(path: Path, level: int) -> logging.handlers.WatchedFileHandler:
+    """Create a WatchedFileHandler for *path*.
+
+    Rotation is managed externally by logrotate (ADR-012).
+    WatchedFileHandler detects when logrotate moves the file and reopens it.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.TimedRotatingFileHandler(
-        filename=str(path),
-        when="midnight",
-        backupCount=BACKUP_COUNT,
-        encoding="utf-8",
-    )
-    handler.suffix = ROTATE_SUFFIX
-
-    stem = path.stem
-    suffix = path.suffix
-
-    def _namer(default_name: str) -> str:
-        # default_name: /var/log/nagabridge/nagabridge.log.2026-05-03
-        # target:       /var/log/nagabridge/nagabridge.2026-05-03.log
-        date_part = default_name.rsplit(".", 1)[-1]
-        return str(path.parent / f"{stem}.{date_part}{suffix}")
-
-    handler.namer = _namer
+    handler = logging.handlers.WatchedFileHandler(str(path), encoding="utf-8")
     handler.setLevel(level)
-    handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FMT))
+    handler.setFormatter(_ShortNameFormatter(LOG_FORMAT, datefmt=LOG_DATE_FMT))
     return handler
 
 
@@ -58,10 +57,12 @@ def configure_logging(
     """
     numeric_level = getattr(logging, level.upper(), logging.INFO)
 
+    formatter = _ShortNameFormatter(LOG_FORMAT, datefmt=LOG_DATE_FMT)
+
     # --- stdout handler (journalctl picks this up via systemd) ---
     stdout_handler = logging.StreamHandler()
     stdout_handler.setLevel(numeric_level)
-    stdout_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FMT))
+    stdout_handler.setFormatter(formatter)
 
     root = logging.getLogger("nagabridge")
     root.setLevel(numeric_level)
@@ -70,8 +71,7 @@ def configure_logging(
 
     # --- core file handler ---
     if log_dir is not None:
-        core_file_handler = _rotating_file_handler(log_dir / "nagabridge.log", numeric_level)
-        root.addHandler(core_file_handler)
+        root.addHandler(_file_handler(log_dir / "nagabridge.log", numeric_level))
 
     root.propagate = False
 
@@ -84,6 +84,6 @@ def configure_logging(
         adapter_logger.propagate = False
         # adapter file
         if log_dir is not None:
-            adapter_logger.addHandler(_rotating_file_handler(log_dir / f"{file_stem}.log", numeric_level))
+            adapter_logger.addHandler(_file_handler(log_dir / f"{file_stem}.log", numeric_level))
         # still mirror to stdout via root handler
         adapter_logger.addHandler(stdout_handler)

@@ -6,26 +6,20 @@ import logging
 import logging.handlers
 from pathlib import Path
 
-from nagabridge.core.logging import configure_logging
+from nagabridge.core.logging import _ShortNameFormatter, configure_logging
 
 
-def test_rotating_handler_namer_produces_adr012_filename(tmp_path: Path) -> None:
-    """Rotated filenames must follow <stem>.<date><suffix> per ADR-012."""
+def test_file_handler_type_is_watched(tmp_path: Path) -> None:
+    """File handler must be WatchedFileHandler so logrotate can rotate without restart."""
     configure_logging("INFO", log_dir=tmp_path)
 
     root = logging.getLogger("nagabridge")
-    file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.TimedRotatingFileHandler)]
-    assert file_handlers, "Expected at least one TimedRotatingFileHandler"
-
-    handler = file_handlers[0]
-    default_name = str(tmp_path / "nagabridge.log.2026-05-03")
-    result = handler.namer(default_name)
-
-    assert result == str(tmp_path / "nagabridge.2026-05-03.log")
+    file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.WatchedFileHandler)]
+    assert file_handlers, "Expected at least one WatchedFileHandler on root logger"
 
 
-def test_rotating_handler_namer_works_for_adapter_log(tmp_path: Path) -> None:
-    """Adapter log filenames must also follow ADR-012 naming."""
+def test_adapter_file_handler_type_is_watched(tmp_path: Path) -> None:
+    """Adapter logger must also use WatchedFileHandler."""
     configure_logging(
         "INFO",
         log_dir=tmp_path,
@@ -33,11 +27,51 @@ def test_rotating_handler_namer_works_for_adapter_log(tmp_path: Path) -> None:
     )
 
     adapter_logger = logging.getLogger("nagabridge.adapters.mqtt")
-    file_handlers = [h for h in adapter_logger.handlers if isinstance(h, logging.handlers.TimedRotatingFileHandler)]
-    assert file_handlers, "Expected TimedRotatingFileHandler on adapter logger"
+    file_handlers = [h for h in adapter_logger.handlers if isinstance(h, logging.handlers.WatchedFileHandler)]
+    assert file_handlers, "Expected WatchedFileHandler on adapter logger"
 
-    handler = file_handlers[0]
-    default_name = str(tmp_path / "mqtt.log.2026-05-03")
-    result = handler.namer(default_name)
 
-    assert result == str(tmp_path / "mqtt.2026-05-03.log")
+def test_short_name_formatter_strips_prefix() -> None:
+    """Formatter must show only the last logger-name segment."""
+    formatter = _ShortNameFormatter("%(name)s")
+    record = logging.LogRecord(
+        name="nagabridge.adapters.powerstream.powerstream",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg="test",
+        args=(),
+        exc_info=None,
+    )
+    assert formatter.format(record) == "powerstream"
+
+
+def test_short_name_formatter_leaves_short_name_unchanged() -> None:
+    """Single-segment names must pass through unchanged."""
+    formatter = _ShortNameFormatter("%(name)s")
+    record = logging.LogRecord(
+        name="bus",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg="test",
+        args=(),
+        exc_info=None,
+    )
+    assert formatter.format(record) == "bus"
+
+
+def test_short_name_formatter_does_not_mutate_original_record() -> None:
+    """Formatter must not alter the original LogRecord name."""
+    formatter = _ShortNameFormatter("%(name)s")
+    record = logging.LogRecord(
+        name="nagabridge.adapters.mqtt.mqtt",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg="test",
+        args=(),
+        exc_info=None,
+    )
+    formatter.format(record)
+    assert record.name == "nagabridge.adapters.mqtt.mqtt"

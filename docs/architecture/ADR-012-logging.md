@@ -52,6 +52,11 @@ Core, Bus und System schreiben in `nagabridge.log`.
 * **Dateiname:** `<name>.YYYY-MM-DD.log`
 * **Verwaltung:** logrotate auf dem Pi
 
+Python verwendet `logging.handlers.WatchedFileHandler` statt eines
+rotierenden Handlers. logrotate benennt die aktive Datei um; der
+`WatchedFileHandler` erkennt die Inode-Änderung beim nächsten
+Schreibvorgang und öffnet die Datei neu – ohne Prozess-Neustart.
+
 Geschätzter Speicherbedarf bei INFO-Level:
 
 ```
@@ -76,16 +81,19 @@ Das Level gilt systemweit für alle Adapter und den Core.
 ### 5. Log-Format
 
 ```
-2026-05-03 14:23:01 [INFO ] [ble-ecoflow ] Verbindung zu Powerstream hergestellt
+2026-05-03 14:23:01 [INFO ] [powerstream ] Verbindung hergestellt
 2026-05-03 14:23:02 [DEBUG] [bus         ] publish: ecoflow/powerstream/state
 2026-05-03 14:23:02 [INFO ] [mqtt        ] State publiziert: ecoflow/powerstream/state
 ```
 
-Format: `YYYY-MM-DD HH:MM:SS [LEVEL] [adapter] Nachricht`
+Format: `YYYY-MM-DD HH:MM:SS [LEVEL] [name] Nachricht`
 
 * Timestamp: lokale Zeit
-* Level: rechtsbündig auf 5 Zeichen (`DEBUG`, `INFO `, `WARN `, `ERROR`)
-* Adapter-Name: linksbündig auf 12 Zeichen für lesbare Spalten
+* Level: linksbündig auf 5 Zeichen (`DEBUG`, `INFO `, `WARN `, `ERROR`)
+* Name: letztes Segment des Python-Logger-Namens, linksbündig auf 12 Zeichen.
+  `nagabridge.adapters.powerstream.powerstream` → `powerstream`,
+  `nagabridge.bus` → `bus`. Implementiert via `_ShortNameFormatter`
+  in `core/logging.py`.
 
 ### 6. Was wird geloggt
 

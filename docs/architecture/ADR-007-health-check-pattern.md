@@ -60,31 +60,35 @@ Jeder Adapter definiert selbst was "gesund" bedeutet:
 
 ### Interface
 
-Jeder Adapter erbt von AdapterBase:
+Jeder Adapter erbt von `Adapter` (`core/adapter.py`) und implementiert
+die abstrakte `health`-Property. Das Publizieren erfolgt über eine
+private `_publish_health()`-Methode im jeweiligen Adapter:
+
 ```python
-class AdapterBase:
+# core/health.py – HealthStatus.to_payload()
+{
+    "adapter":   "<adapter_name>",
+    "state":     "ok" | "degraded" | "failed",
+    "detail":    "<beschreibender Text>",
+    "timestamp": <float, time.monotonic()>
+}
+```
 
-    @property
-    def health(self) -> HealthStatus:
-        pass
+Der zentrale Health Monitor (`main.py: _health_monitor`) publiziert
+den aggregierten Gesamtstatus auf `system/health/overall`:
 
-    async def publish_health(self, bus):
-        status = self.health
-        await bus.publish(
-            f"system/health/{self.name}",
-            {
-                "status": status.value,
-                "details": status.details,
-                "timestamp": status.timestamp
-            }
-        )
+```python
+{
+    "state":     "ok" | "degraded" | "failed",
+    "adapters":  {"<name>": "<state>", ...},
+    "timestamp": <float, time.monotonic()>
+}
 ```
 
 ### Health Check Intervall
 
-* Adapter publishen ihren Status alle **30 Sekunden**
-* Bei Statusänderung sofort publishen
-* Health Monitor publisht Gesamtstatus bei jeder Änderung
+* Adapter publishen ihren Status bei **jeder Statusänderung** sofort
+* Health Monitor publiziert `system/health/overall` alle **30 Sekunden**
 
 ## Betrachtete Alternativen
 
