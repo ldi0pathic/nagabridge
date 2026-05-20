@@ -166,7 +166,11 @@ def _optional_positive_float(value: object, field_name: str) -> float | None:
     """Parse an optional positive float config value."""
     if value is None:
         return None
-    parsed = float(str(value))
+    try:
+        parsed = float(str(value))
+    except ValueError:
+        msg = f"{field_name} muss eine Zahl sein, erhalten: {value!r}"
+        raise ConfigError(msg) from None
     if parsed <= 0:
         msg = f"{field_name} muss größer als 0 sein"
         raise ConfigError(msg)
@@ -177,7 +181,11 @@ def _optional_non_negative_float(value: object, field_name: str) -> float | None
     """Parse an optional non-negative float config value."""
     if value is None:
         return None
-    parsed = float(str(value))
+    try:
+        parsed = float(str(value))
+    except ValueError:
+        msg = f"{field_name} muss eine Zahl sein, erhalten: {value!r}"
+        raise ConfigError(msg) from None
     if parsed < 0:
         msg = f"{field_name} darf nicht negativ sein"
         raise ConfigError(msg)
@@ -188,7 +196,11 @@ def _optional_positive_int(value: object, field_name: str) -> int | None:
     """Parse an optional positive integer config value."""
     if value is None:
         return None
-    parsed = int(str(value))
+    try:
+        parsed = int(str(value))
+    except ValueError:
+        msg = f"{field_name} muss eine ganze Zahl sein, erhalten: {value!r}"
+        raise ConfigError(msg) from None
     if parsed <= 0:
         msg = f"{field_name} muss größer als 0 sein"
         raise ConfigError(msg)
