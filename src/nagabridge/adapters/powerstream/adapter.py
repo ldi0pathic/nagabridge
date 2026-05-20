@@ -243,7 +243,7 @@ class PowerstreamAdapter(Adapter):
         if self._bus is None:
             return
         target = topic or self._config.state_topic
-        cache = self._last_bat_state if topic else self._last_state
+        cache = self._last_bat_state if target == self._config.bat_state_topic else self._last_state
         cache.update(payload)
         await self._bus.publish(target, dict(cache))
 

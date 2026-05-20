@@ -383,3 +383,33 @@ def test_publish_state_copies_minimal_adr002_payload() -> None:
         await adapter.stop()
 
     asyncio.run(scenario())
+
+
+def test_publish_state_routes_bat_topic_to_battery_cache() -> None:
+    """Payloads published with bat_state_topic must go into the battery cache, not the main state cache."""
+
+    async def scenario() -> None:
+        bus = EventBus()
+        adapter = PowerstreamAdapter(_config(serial_number=None))
+        main_received: list[dict[str, object]] = []
+        bat_received: list[dict[str, object]] = []
+
+        async def main_handler(_t: str, p: dict[str, object]) -> None:
+            main_received.append(p)
+
+        async def bat_handler(_t: str, p: dict[str, object]) -> None:
+            bat_received.append(p)
+
+        await bus.subscribe("ecoflow/powerstream/state", main_handler)
+        await bus.subscribe("ecoflow/powerstream_battery/state", bat_handler)
+        await adapter.start(bus)
+
+        await adapter._publish_state({"bat_soc": 75}, topic=adapter._config.bat_state_topic)  # type: ignore[attr-defined]
+        await asyncio.sleep(0)
+
+        assert bat_received == [{"bat_soc": 75}]
+        assert main_received == []
+
+        await adapter.stop()
+
+    asyncio.run(scenario())
