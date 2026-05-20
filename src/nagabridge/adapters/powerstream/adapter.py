@@ -19,7 +19,7 @@ from nagabridge.core.topics import health_topic
 if TYPE_CHECKING:
     from .protocol import Packet, Type1Crypto
 
-log = logging.getLogger(__name__)
+_MODULE = __name__.rsplit(".", 1)[0]
 
 UUID_WRITE = "00000002-0000-1000-8000-00805f9b34fb"
 UUID_NOTIFY = "00000003-0000-1000-8000-00805f9b34fb"
@@ -103,6 +103,7 @@ class PowerstreamAdapter(Adapter):
     ) -> None:
         """Initialize the adapter with config and injectable BLE dependencies."""
         self._config = config if isinstance(config, PowerstreamAdapterConfig) else PowerstreamAdapterConfig.from_ble_device(config)
+        self._log = logging.getLogger(f"{_MODULE}.{self._config.name.lower().replace(' ', '-')}")
         self._connection_factory = connection_factory or self._default_connection_factory
         self._crypto_factory = crypto_factory or self._default_crypto_factory
         self._health = HealthStatus()
@@ -143,7 +144,7 @@ class PowerstreamAdapter(Adapter):
         await bus.subscribe(self._config.command_topic, self._on_command)
 
         if not self._config.serial_number:
-            log.info("PowerStream %s has no serial number configured; BLE connection is deferred", self.name)
+            self._log.info("PowerStream %s has no serial number configured; BLE connection is deferred", self.name)
             self._health = HealthStatus(state=HealthState.degraded, detail="no serial number configured")
             await self._publish_health()
             return
@@ -157,7 +158,7 @@ class PowerstreamAdapter(Adapter):
         except Exception as exc:
             self._health = HealthStatus(state=HealthState.failed, detail=f"start failed: {exc}")
             await self._publish_health()
-            log.warning("PowerStream %s initial BLE start failed; maintain loop will retry: %s", self.name, exc)
+            self._log.warning("PowerStream %s initial BLE start failed; maintain loop will retry: %s", self.name, exc)
 
         self._maintain_task = asyncio.create_task(self._maintain_loop())
 
@@ -198,9 +199,9 @@ class PowerstreamAdapter(Adapter):
             elif command in {"set_load_power", "set_permanent_watts"}:
                 await self.set_load_power(int(payload["watts"]))
             else:
-                log.debug("Ignoring unsupported PowerStream command payload: %s", payload)
+                self._log.debug("Ignoring unsupported PowerStream command payload: %s", payload)
         except Exception as exc:
-            log.exception("PowerStream command failed: %s", payload)
+            self._log.exception("PowerStream command failed: %s", payload)
             self._health = HealthStatus(state=HealthState.failed, detail=f"command failed: {exc}")
             await self._publish_health()
 
@@ -222,11 +223,11 @@ class PowerstreamAdapter(Adapter):
                     if self._auth_event is not None:
                         self._auth_event.set()
                     else:
-                        log.debug("Auth response received outside auth flow")
+                        self._log.debug("Auth response received outside auth flow")
                 elif packet.cmd_set == 0x14 and packet.cmd_id == 0x86:
-                    log.debug("PowerStream %s ignoring inv_power_pack (historic data, not relevant)", self.name)
+                    self._log.debug("PowerStream %s ignoring inv_power_pack (historic data, not relevant)", self.name)
                 else:
-                    log.warning(
+                    self._log.warning(
                         "Unhandled packet src=0x%02x cmd_set=0x%02x cmd_id=0x%02x payload=%s",
                         packet.src,
                         packet.cmd_set,
@@ -234,7 +235,7 @@ class PowerstreamAdapter(Adapter):
                         packet.payload.hex(),
                     )
         except Exception as exc:
-            log.exception("PowerStream notification handling failed")
+            self._log.exception("PowerStream notification handling failed")
             self._health = HealthStatus(state=HealthState.failed, detail=f"notification failed: {exc}")
             await self._publish_health()
 
@@ -255,7 +256,7 @@ class PowerstreamAdapter(Adapter):
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                log.warning("PowerStream status poll failed for %s: %s", self.name, exc)
+                self._log.warning("PowerStream status poll failed for %s: %s", self.name, exc)
                 self._health = HealthStatus(state=HealthState.failed, detail=f"poll failed: {exc}")
                 await self._publish_health()
                 await self._reconnect_after_failure(exc)
@@ -285,7 +286,7 @@ class PowerstreamAdapter(Adapter):
             return
         async with self._reconnect_lock:
             try:
-                log.info("Reconnecting PowerStream %s after BLE failure: %s", self.name, exc)
+                self._log.info("Reconnecting PowerStream %s after BLE failure: %s", self.name, exc)
                 self._rx_buffer = bytearray()
                 self._authenticated = False
                 await self._connection.reconnect()
@@ -295,7 +296,7 @@ class PowerstreamAdapter(Adapter):
             except asyncio.CancelledError:
                 raise
             except Exception as reconnect_exc:
-                log.warning("PowerStream reconnect failed for %s: %s", self.name, reconnect_exc)
+                self._log.warning("PowerStream reconnect failed for %s: %s", self.name, reconnect_exc)
                 self._health = HealthStatus(state=HealthState.failed, detail=f"reconnect failed: {reconnect_exc}")
                 await self._publish_health()
 
@@ -305,7 +306,7 @@ class PowerstreamAdapter(Adapter):
         if not self._config.serial_number:
             return
         if not self._config.user_id:
-            log.info("PowerStream %s has no user_id configured; authentication is skipped", self.name)
+            self._log.info("PowerStream %s has no user_id configured; authentication is skipped", self.name)
             return
         try:
             from .protocol import COMMAND_ID_AUTH, COMMAND_ID_AUTH_STATUS, COMMAND_SET_AUTH, build_auth_md5
@@ -319,24 +320,24 @@ class PowerstreamAdapter(Adapter):
             await self._write_packet(COMMAND_SET_AUTH, COMMAND_ID_AUTH_STATUS, b"", dsrc=0x01, ddst=0x01)
             try:
                 await asyncio.wait_for(self._auth_event.wait(), timeout=5.0)
-                log.debug("PowerStream %s auth status response received", self.name)
+                self._log.debug("PowerStream %s auth status response received", self.name)
             except TimeoutError:
-                log.warning("PowerStream %s auth status response timed out, proceeding anyway", self.name)
+                self._log.warning("PowerStream %s auth status response timed out, proceeding anyway", self.name)
             finally:
                 self._auth_event = None
 
             await self._write_packet(COMMAND_SET_AUTH, COMMAND_ID_AUTH, auth_payload, dsrc=0x01, ddst=0x01)
             self._authenticated = True
-            log.info("PowerStream %s authentication packet sent", self.name)
+            self._log.info("PowerStream %s authentication packet sent", self.name)
         except Exception as exc:
             self._health = HealthStatus(state=HealthState.failed, detail=f"auth failed: {exc}")
             await self._publish_health()
-            log.exception("PowerStream authentication failed for %s", self.name)
+            self._log.exception("PowerStream authentication failed for %s", self.name)
             raise
 
     async def _write_packet(self, cmd_set: int, cmd_id: int, payload: bytes = b"", dsrc: int = 1, ddst: int = 1) -> None:
         if self._connection is None:
-            log.debug("Skipping PowerStream write because BLE is not connected")
+            self._log.debug("Skipping PowerStream write because BLE is not connected")
             return
         encoded = self._encode_packet(cmd_set, cmd_id, payload, dsrc=dsrc, ddst=ddst)
         await self._connection.write(encoded)
@@ -363,7 +364,7 @@ class PowerstreamAdapter(Adapter):
         if self._config.serial_number is None:
             return
         self._crypto = self._crypto_factory(self._config.serial_number)
-        log.debug(
+        self._log.debug(
             "Initialized PowerStream Type1Crypto for %s (serial ending in %s, user_id configured=%s)",
             self.name,
             self._config.serial_number[-4:],
@@ -397,7 +398,7 @@ class PowerstreamAdapter(Adapter):
         try:
             await self._bus.publish(health_topic(self.name), self._health.to_payload(self.name))
         except Exception:
-            log.exception("Failed to publish health for %s", self.name)
+            self._log.exception("Failed to publish health for %s", self.name)
 
     async def _cleanup_connection(self) -> None:
         if self._connection is not None:

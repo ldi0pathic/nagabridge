@@ -107,8 +107,7 @@ def build_adapters_from_config(
     adapter_log_names: dict[str, str] = {}
     for device in cfg.devices:
         slug = device.name.lower().replace(" ", "-")
-        # PowerStream adapter logger lives under nagabridge.adapters.powerstream
-        prefix = f"nagabridge.adapters.{device.type}"
+        prefix = f"nagabridge.adapters.{device.type}.{slug}"
         adapter_log_names[prefix] = f"ble-{slug}"
     if cfg.mqtt is not None:
         adapter_log_names["nagabridge.adapters.mqtt"] = "mqtt"

@@ -8,7 +8,7 @@ from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthState, HealthStatus
 from nagabridge.core.topics import health_topic
 
-log = logging.getLogger(__name__)
+_MODULE = __name__.rsplit(".", 1)[0]
 
 
 class Delta2Adapter(Adapter):
@@ -17,6 +17,7 @@ class Delta2Adapter(Adapter):
     def __init__(self, config: BleDeviceConfig) -> None:
         """Initialize the adapter with BLE device configuration."""
         self._config = config
+        self._log = logging.getLogger(f"{_MODULE}.{config.name.lower().replace(' ', '-')}")
         self._health = HealthStatus()
         self._bus: EventBus | None = None
 
@@ -54,7 +55,7 @@ class Delta2Adapter(Adapter):
         try:
             await self._bus.publish(health_topic(self.name), self._health.to_payload(self.name))
         except Exception:
-            log.exception("Failed to publish health for %s", self.name)
+            self._log.exception("Failed to publish health for %s", self.name)
 
     async def stop(self) -> None:
         """Stop the adapter lifecycle."""
