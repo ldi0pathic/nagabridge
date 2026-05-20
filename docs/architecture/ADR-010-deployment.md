@@ -153,7 +153,7 @@ Ein Release-Tag wird nur erstellt wenn alle CI-Checks grün sind:
 Code push
    │
    ▼
-CI grün? (ruff, black, pytest, bandit)
+CI grün? (ruff, mypy, pytest)
    │ nein → kein Release möglich
    │ ja
    ▼
@@ -165,6 +165,12 @@ Pi erkennt neuen Tag gemäß konfiguriertem Trigger
    ▼
 pre_update_state speichern → Update → Health Check → fertig
 ```
+
+> **Amendment 2026-05-20:** `bandit` wurde aus dem CI-Quality-Gate entfernt.
+> `bandit` produzierte zu viele False-Positives für dieses Projekt und brachte
+> keinen praktischen Mehrwert. Sicherheitsrelevante Lint-Regeln werden stattdessen
+> durch `ruff` (Regelsets `S`, `B`) abgedeckt. `black` wurde durch
+> `ruff format` ersetzt.
 
 ### 7. Versionsverwaltung auf Disk
 
