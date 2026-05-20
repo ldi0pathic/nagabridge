@@ -41,7 +41,13 @@ def test_stub_adapter_lifecycle_health_states() -> None:
             )
 
             ts_before = adapter.health.timestamp
+            health_published: list[dict[str, object]] = []
+            topic = f"system/health/{adapter.name.lower()}"
 
+            async def health_handler(_t: str, payload: dict[str, object]) -> None:
+                health_published.append(payload)
+
+            await bus.subscribe(topic, health_handler)
             await adapter.start(bus)
             _ensure(
                 adapter.health.is_ok,
@@ -58,6 +64,7 @@ def test_stub_adapter_lifecycle_health_states() -> None:
 
             ts_running = adapter.health.timestamp
             await adapter.stop()
+            await asyncio.sleep(0)
             _ensure(
                 adapter.health.timestamp >= ts_running,
                 "Adapter timestamp must be monotonic across stop()",
@@ -69,6 +76,10 @@ def test_stub_adapter_lifecycle_health_states() -> None:
             _ensure(
                 adapter.health.detail == "stopped",
                 "Adapter detail must be 'stopped' after stop()",
+            )
+            _ensure(
+                any(p.get("detail") == "stopped" for p in health_published),
+                f"'stopped' health was never published to the bus for {adapter.name}",
             )
 
     asyncio.run(scenario())

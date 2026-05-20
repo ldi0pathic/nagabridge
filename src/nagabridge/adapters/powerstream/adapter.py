@@ -172,11 +172,11 @@ class PowerstreamAdapter(Adapter):
 
         if self._bus is not None:
             await self._bus.unsubscribe(self._config.command_topic, self._on_command)
-            self._bus = None
 
         await self._cleanup_connection()
         self._health = HealthStatus(state=HealthState.failed, detail="stopped")
         await self._publish_health()
+        self._bus = None
 
     async def request_status(self) -> None:
         """Request one fresh status update from the PowerStream."""
