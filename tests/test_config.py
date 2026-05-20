@@ -217,3 +217,54 @@ poll_interval_seconds = 0
 
     with pytest.raises(ConfigError):
         load_config(path)
+
+
+def test_load_config_rejects_non_numeric_poll_interval(tmp_path: Path) -> None:
+    """Non-numeric poll_interval_seconds should raise ConfigError."""
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+poll_interval_seconds = "zehn"
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_load_config_rejects_non_numeric_reconnect_backoff(tmp_path: Path) -> None:
+    """Non-numeric reconnect_backoff_seconds should raise ConfigError."""
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+reconnect_backoff_seconds = "fast"
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_load_config_rejects_non_numeric_reconnect_attempts(tmp_path: Path) -> None:
+    """Non-numeric reconnect_attempts should raise ConfigError."""
+    path = _write(
+        tmp_path,
+        """
+[[adapters.ble_device]]
+name = "Powerstream"
+mac = "AA:BB:CC:DD:EE:FF"
+type = "powerstream"
+reconnect_attempts = "drei"
+""",
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(path)
