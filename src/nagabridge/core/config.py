@@ -10,6 +10,8 @@ from typing import Literal, cast
 
 VALID_DEVICE_TYPES = {"powerstream", "delta2max", "delta2"}
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
+VALID_UPDATE_TRIGGERS = {"hourly", "daily", "manual"}
+VALID_CHECK_ONLY_IF = {"any_device_online", "always"}
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 MAX_TCP_PORT = 65535
 
@@ -45,12 +47,21 @@ class MqttConfig:
 
 
 @dataclass(slots=True)
+class UpdatesConfig:
+    """Configuration for the update subsystem."""
+
+    trigger: str = "hourly"
+    check_only_if: str = "any_device_online"
+
+
+@dataclass(slots=True)
 class NagaBridgeConfig:
     """Complete application configuration model."""
 
     log_level: str = "INFO"
     devices: list[BleDeviceConfig] = field(default_factory=list)
     mqtt: MqttConfig | None = None
+    updates: UpdatesConfig = field(default_factory=UpdatesConfig)
 
 
 def load_config(path: str | Path) -> NagaBridgeConfig:
@@ -63,8 +74,26 @@ def load_config(path: str | Path) -> NagaBridgeConfig:
     log_level = _parse_log_level(system)
     devices = _parse_ble_devices(adapters)
     mqtt = _parse_mqtt(data.get("mqtt"))
+    updates = _parse_updates(data)
 
-    return NagaBridgeConfig(log_level=log_level, devices=devices, mqtt=mqtt)
+    return NagaBridgeConfig(log_level=log_level, devices=devices, mqtt=mqtt, updates=updates)
+
+
+def _parse_updates(data: dict[str, object]) -> UpdatesConfig:
+    """Parse and validate optional [updates] configuration."""
+    updates_raw = data.get("updates", {})
+    if not isinstance(updates_raw, dict):
+        msg = "updates muss ein Objekt sein"
+        raise ConfigError(msg)
+    trigger = str(updates_raw.get("trigger", "hourly"))
+    check_only_if = str(updates_raw.get("check_only_if", "any_device_online"))
+    if trigger not in VALID_UPDATE_TRIGGERS:
+        msg = f"Ungültiger updates.trigger '{trigger}'"
+        raise ConfigError(msg)
+    if check_only_if not in VALID_CHECK_ONLY_IF:
+        msg = f"Ungültiges updates.check_only_if '{check_only_if}'"
+        raise ConfigError(msg)
+    return UpdatesConfig(trigger=trigger, check_only_if=check_only_if)
 
 
 def _parse_log_level(system: dict[str, object]) -> str:
