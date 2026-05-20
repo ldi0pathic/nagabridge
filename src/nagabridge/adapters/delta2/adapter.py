@@ -3,7 +3,7 @@
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
-from nagabridge.core.health import HealthStatus
+from nagabridge.core.health import HealthState, HealthStatus
 
 
 class Delta2Adapter(Adapter):
@@ -32,7 +32,7 @@ class Delta2Adapter(Adapter):
     async def start(self, bus: EventBus) -> None:
         """Start the adapter lifecycle."""
         _ = bus
-        self._health = HealthStatus(online=False, detail="not implemented")
+        self._health = HealthStatus(state=HealthState.degraded, detail="not implemented")
 
     @property
     def published_topics(self) -> list[str]:
@@ -43,4 +43,4 @@ class Delta2Adapter(Adapter):
 
     async def stop(self) -> None:
         """Stop the adapter lifecycle."""
-        self._health = HealthStatus(online=False, detail="stopped")
+        self._health = HealthStatus(state=HealthState.failed, detail="stopped")

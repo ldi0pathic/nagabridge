@@ -12,7 +12,7 @@ from nagabridge.adapters.powerstream.adapter import PowerstreamAdapter
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
-from nagabridge.core.health import HealthStatus
+from nagabridge.core.health import HealthState, HealthStatus
 from nagabridge.main import (
     DEFAULT_CONFIG_PATH,
     EXIT_CONFIG_ACTION_REQUIRED,
@@ -89,12 +89,12 @@ class FailingStartAdapter(Adapter):
 
     async def start(self, bus: EventBus) -> None:
         _ = bus
-        self._health = HealthStatus(online=False, detail="start failed")
+        self._health = HealthStatus(state=HealthState.failed, detail="start failed")
         raise RuntimeError("boom")
 
     async def stop(self) -> None:
         self.stop_called = True
-        self._health = HealthStatus(online=False, detail="stopped")
+        self._health = HealthStatus(state=HealthState.failed, detail="stopped")
 
 
 class HealthyAdapter(Adapter):
@@ -121,11 +121,11 @@ class HealthyAdapter(Adapter):
     async def start(self, bus: EventBus) -> None:
         _ = bus
         self.start_called = True
-        self._health = HealthStatus(online=True, detail="running")
+        self._health = HealthStatus(state=HealthState.ok, detail="running")
 
     async def stop(self) -> None:
         self.stop_called = True
-        self._health = HealthStatus(online=False, detail="stopped")
+        self._health = HealthStatus(state=HealthState.failed, detail="stopped")
 
 
 def _write_config(tmp_path: Path) -> Path:
@@ -310,12 +310,12 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
             await adapter.start(bus)
 
         _ensure(
-            adapters[0].health.online is True,
+            adapters[0].health.is_ok,
             "Implemented PowerStream adapter should be online after start",
         )
         _ensure(
-            adapters[1].health.online is False,
-            "Unimplemented Delta2 adapter should stay offline after start",
+            adapters[1].health.is_degraded,
+            "Unimplemented Delta2 adapter should stay degraded after start",
         )
         _ensure(
             adapters[1].health.detail == "not implemented",
@@ -332,7 +332,7 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
 
     asyncio.run(scenario())
     _ensure(
-        all(not adapter.health.online for adapter in adapters),
+        all(adapter.health.is_failed for adapter in adapters),
         "All adapters should be offline after shutdown",
     )
 

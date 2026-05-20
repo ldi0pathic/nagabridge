@@ -116,7 +116,7 @@ def test_mqtt_adapter_stop_before_start_is_safe() -> None:
             client_factory=FakeMqttClient,
         )
         await adapter.stop()
-        _ensure(adapter.health.online is False, "Adapter must remain offline")
+        _ensure(adapter.health.is_failed, "Adapter must remain offline")
 
     asyncio.run(scenario())
 
@@ -166,7 +166,7 @@ def test_mqtt_adapter_with_empty_subscribe_topics_still_starts() -> None:
         )
 
         await adapter.start(bus)
-        _ensure(adapter.health.online is True, "Adapter should be online after start")
+        _ensure(adapter.health.is_ok, "Adapter should be online after start")
         _ensure(bus.topics == [], "No topics should be subscribed")
 
         await adapter.stop()

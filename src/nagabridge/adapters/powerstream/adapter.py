@@ -13,7 +13,7 @@ from nagabridge.core.adapter import Adapter
 from nagabridge.core.ble import BleakClientAdapter, BleConnection, BleConnectionConfig
 from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.config import BleDeviceConfig
-from nagabridge.core.health import HealthStatus
+from nagabridge.core.health import HealthState, HealthStatus
 
 if TYPE_CHECKING:
     from .protocol import Packet, Type1Crypto
@@ -143,16 +143,16 @@ class PowerstreamAdapter(Adapter):
 
         if not self._config.serial_number:
             log.info("PowerStream %s has no serial number configured; BLE connection is deferred", self.name)
-            self._health = HealthStatus(online=False, detail="no serial number configured")
+            self._health = HealthStatus(state=HealthState.degraded, detail="no serial number configured")
             return
 
         try:
             self._initialize_crypto()
             self._connection = self._connection_factory(self._connection_config())
             await self._connect_ble()
-            self._health = HealthStatus(online=True, detail="running")
+            self._health = HealthStatus(state=HealthState.ok, detail="running")
         except Exception as exc:
-            self._health = HealthStatus(online=False, detail=f"start failed: {exc}")
+            self._health = HealthStatus(state=HealthState.failed, detail=f"start failed: {exc}")
             log.warning("PowerStream %s initial BLE start failed; maintain loop will retry: %s", self.name, exc)
 
         self._maintain_task = asyncio.create_task(self._maintain_loop())
@@ -170,7 +170,7 @@ class PowerstreamAdapter(Adapter):
             self._bus = None
 
         await self._cleanup_connection()
-        self._health = HealthStatus(online=False, detail="stopped")
+        self._health = HealthStatus(state=HealthState.failed, detail="stopped")
 
     async def request_status(self) -> None:
         """Request one fresh status update from the PowerStream."""
@@ -196,7 +196,7 @@ class PowerstreamAdapter(Adapter):
                 log.debug("Ignoring unsupported PowerStream command payload: %s", payload)
         except Exception as exc:
             log.exception("PowerStream command failed: %s", payload)
-            self._health = HealthStatus(online=False, detail=f"command failed: {exc}")
+            self._health = HealthStatus(state=HealthState.failed, detail=f"command failed: {exc}")
 
     async def _on_notification(self, data: bytes) -> None:
         if self._bus is None:
@@ -229,7 +229,7 @@ class PowerstreamAdapter(Adapter):
                     )
         except Exception as exc:
             log.exception("PowerStream notification handling failed")
-            self._health = HealthStatus(online=False, detail=f"notification failed: {exc}")
+            self._health = HealthStatus(state=HealthState.failed, detail=f"notification failed: {exc}")
 
     async def _publish_state(self, payload: Payload, topic: str | None = None) -> None:
         if self._bus is None:
@@ -249,7 +249,7 @@ class PowerstreamAdapter(Adapter):
                 raise
             except Exception as exc:
                 log.warning("PowerStream status poll failed for %s: %s", self.name, exc)
-                self._health = HealthStatus(online=False, detail=f"poll failed: {exc}")
+                self._health = HealthStatus(state=HealthState.failed, detail=f"poll failed: {exc}")
                 await self._reconnect_after_failure(exc)
 
     async def _connect_ble(self) -> None:
@@ -260,7 +260,7 @@ class PowerstreamAdapter(Adapter):
         self._authenticated = False
         await self._connection.connect(self._on_notification)
         await self._authenticate()
-        self._health = HealthStatus(online=True, detail="running")
+        self._health = HealthStatus(state=HealthState.ok, detail="running")
 
     async def _ensure_ble_ready(self) -> None:
         if self._connection is None:
@@ -281,12 +281,12 @@ class PowerstreamAdapter(Adapter):
                 self._authenticated = False
                 await self._connection.reconnect()
                 await self._authenticate()
-                self._health = HealthStatus(online=True, detail="running")
+                self._health = HealthStatus(state=HealthState.ok, detail="running")
             except asyncio.CancelledError:
                 raise
             except Exception as reconnect_exc:
                 log.warning("PowerStream reconnect failed for %s: %s", self.name, reconnect_exc)
-                self._health = HealthStatus(online=False, detail=f"reconnect failed: {reconnect_exc}")
+                self._health = HealthStatus(state=HealthState.failed, detail=f"reconnect failed: {reconnect_exc}")
 
     async def _authenticate(self) -> None:
         """Send the PowerStream MD5 authentication packet when credentials exist."""
@@ -318,7 +318,7 @@ class PowerstreamAdapter(Adapter):
             self._authenticated = True
             log.info("PowerStream %s authentication packet sent", self.name)
         except Exception as exc:
-            self._health = HealthStatus(online=False, detail=f"auth failed: {exc}")
+            self._health = HealthStatus(state=HealthState.failed, detail=f"auth failed: {exc}")
             log.exception("PowerStream authentication failed for %s", self.name)
             raise
 
