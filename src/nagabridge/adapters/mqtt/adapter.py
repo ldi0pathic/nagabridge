@@ -12,7 +12,7 @@ from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.health import HealthState, HealthStatus
 from nagabridge.core.topics import health_topic
 
-log = logging.getLogger(__name__)
+_MODULE = __name__.rsplit(".", 1)[0]
 
 
 class _SupportsMqttClient(Protocol):
@@ -53,6 +53,7 @@ class MqttAdapter(Adapter):
     ) -> None:
         """Build a new adapter with optional injected MQTT client factory."""
         self._config = config
+        self._log = logging.getLogger(f"{_MODULE}.mqtt")
         self._client_factory = client_factory
         self._health = HealthStatus(state=HealthState.failed, detail="not started")
         self._bus: EventBus | None = None
@@ -122,7 +123,7 @@ class MqttAdapter(Adapter):
         try:
             await self._bus.publish(health_topic(self.name), self._health.to_payload(self.name))
         except Exception:
-            log.exception("Failed to publish health for %s", self.name)
+            self._log.exception("Failed to publish health for %s", self.name)
 
     async def _on_bus_event(self, topic: Topic, payload: Payload) -> None:
         """Publish incoming bus events to MQTT."""
