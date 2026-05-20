@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nagabridge.core.adapter import Adapter
-from nagabridge.core.health import HealthStatus
+from nagabridge.core.health import HealthState, HealthStatus
 
 if TYPE_CHECKING:
     from nagabridge.core.bus import EventBus, Payload, Topic
@@ -17,7 +17,7 @@ class MockMqttAdapter(Adapter):
     def __init__(self, subscribe_topic: str = "ecoflow/powerstream/state") -> None:
         """Create a mock MQTT adapter with a single subscribed source topic."""
         self._subscribe_topic = subscribe_topic
-        self._health = HealthStatus(online=False, detail="not started")
+        self._health = HealthStatus(state=HealthState.failed, detail="not started")
         self._bus: EventBus | None = None
         self.published: list[tuple[Topic, Payload]] = []
 
@@ -40,13 +40,13 @@ class MockMqttAdapter(Adapter):
         """Register event handler and mark adapter as running."""
         self._bus = bus
         await bus.subscribe(self._subscribe_topic, self._on_bus_event)
-        self._health = HealthStatus(online=True, detail="running")
+        self._health = HealthStatus(state=HealthState.ok, detail="running")
 
     async def stop(self) -> None:
         """Unregister event handler and mark adapter as stopped."""
         if self._bus is not None:
             await self._bus.unsubscribe(self._subscribe_topic, self._on_bus_event)
-        self._health = HealthStatus(online=False, detail="stopped")
+        self._health = HealthStatus(state=HealthState.failed, detail="stopped")
         self._bus = None
 
     async def _on_bus_event(self, topic: Topic, payload: Payload) -> None:

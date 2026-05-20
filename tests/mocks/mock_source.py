@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nagabridge.core.adapter import Adapter
-from nagabridge.core.health import HealthStatus
+from nagabridge.core.health import HealthState, HealthStatus
 
 if TYPE_CHECKING:
     from nagabridge.core.bus import EventBus
@@ -19,7 +19,7 @@ class MockPowerstreamSourceAdapter(Adapter):
     def __init__(self) -> None:
         """Initialize source adapter in stopped state."""
         self._bus: EventBus | None = None
-        self._health = HealthStatus(online=False, detail="not started")
+        self._health = HealthStatus(state=HealthState.failed, detail="not started")
 
     @property
     def name(self) -> str:
@@ -39,11 +39,11 @@ class MockPowerstreamSourceAdapter(Adapter):
     async def start(self, bus: EventBus) -> None:
         """Store bus reference and mark adapter as running."""
         self._bus = bus
-        self._health = HealthStatus(online=True, detail="running")
+        self._health = HealthStatus(state=HealthState.ok, detail="running")
 
     async def stop(self) -> None:
         """Reset bus reference and mark adapter as stopped."""
-        self._health = HealthStatus(online=False, detail="stopped")
+        self._health = HealthStatus(state=HealthState.failed, detail="stopped")
         self._bus = None
 
     async def publish_state(self, power: int, battery: int, pv_input: int) -> None:

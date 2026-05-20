@@ -8,7 +8,7 @@ from typing import Protocol, cast
 
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus, Payload, Topic
-from nagabridge.core.health import HealthStatus
+from nagabridge.core.health import HealthState, HealthStatus
 
 
 class _SupportsMqttClient(Protocol):
@@ -50,7 +50,7 @@ class MqttAdapter(Adapter):
         """Build a new adapter with optional injected MQTT client factory."""
         self._config = config
         self._client_factory = client_factory
-        self._health = HealthStatus(online=False, detail="not started")
+        self._health = HealthStatus(state=HealthState.failed, detail="not started")
         self._bus: EventBus | None = None
         self._client: _SupportsMqttClient | None = None
 
@@ -92,7 +92,7 @@ class MqttAdapter(Adapter):
             await bus.subscribe(topic, self._on_bus_event)
 
         self._health = HealthStatus(
-            online=True,
+            state=HealthState.ok,
             detail=f"connected to {self._config.host}:{self._config.port}",
         )
 
@@ -106,7 +106,7 @@ class MqttAdapter(Adapter):
             self._client.loop_stop()
             self._client.disconnect()
 
-        self._health = HealthStatus(online=False, detail="stopped")
+        self._health = HealthStatus(state=HealthState.failed, detail="stopped")
         self._client = None
         self._bus = None
 

@@ -119,7 +119,7 @@ def test_start_connects_ble_subscribes_and_initializes_crypto() -> None:
 
         await adapter.start(bus)
 
-        assert adapter.health.online
+        assert adapter.health.is_ok
         assert adapter.health.detail == "running"
         assert created_crypto[0].serial_number == "SN123"
         assert created_connections[0].connected
@@ -150,7 +150,7 @@ def test_maintain_loop_reconnects_after_runtime_disconnect() -> None:
 
         assert connection.reconnect_calls >= 1
         assert connection.connected
-        assert adapter.health.online is True
+        assert adapter.health.is_ok
         assert adapter.health.detail == "running"
         assert adapter._rx_buffer == bytearray()  # type: ignore[attr-defined]
         assert connection.handler is not None
@@ -177,7 +177,7 @@ def test_maintain_loop_reconnects_after_poll_write_failure() -> None:
 
         assert connection.reconnect_calls >= 1
         assert connection.connected
-        assert adapter.health.online is True
+        assert adapter.health.is_ok
         assert adapter.health.detail == "running"
 
         await adapter.stop()
@@ -192,12 +192,12 @@ def test_start_without_serial_keeps_legacy_lifecycle_without_ble() -> None:
 
         await adapter.start(bus)
 
-        assert adapter.health.online is False
+        assert adapter.health.is_degraded
         assert adapter.health.detail == "no serial number configured"
         assert bus.subscriber_count("ecoflow/powerstream/command") == 1
 
         await adapter.stop()
-        assert not adapter.health.online
+        assert adapter.health.is_failed
 
     asyncio.run(scenario())
 
@@ -292,7 +292,7 @@ def test_stop_unsubscribes_and_disconnects() -> None:
 
         assert connection.disconnected
         assert bus.subscriber_count("ecoflow/powerstream/command") == 0
-        assert not adapter.health.online
+        assert adapter.health.is_failed
         assert adapter.health.detail == "stopped"
 
     asyncio.run(scenario())
@@ -353,7 +353,7 @@ def test_authentication_failure_sets_health_and_keeps_maintain_loop_running() ->
         )  # type: ignore[arg-type]
 
         await adapter.start(EventBus())
-        assert adapter.health.online is False
+        assert adapter.health.is_failed
         assert "start failed" in adapter.health.detail
         assert adapter._maintain_task is not None  # type: ignore[attr-defined]
 

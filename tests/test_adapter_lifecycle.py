@@ -34,7 +34,7 @@ def test_stub_adapter_lifecycle_health_states() -> None:
         ]
 
         for adapter in adapters:
-            _ensure(adapter.health.online is False, "Adapter must start offline")
+            _ensure(adapter.health.is_failed, "Adapter must start offline")
             _ensure(
                 adapter.health.detail == "not started",
                 "Adapter must start with 'not started' detail",
@@ -44,7 +44,7 @@ def test_stub_adapter_lifecycle_health_states() -> None:
 
             await adapter.start(bus)
             _ensure(
-                adapter.health.online is True,
+                adapter.health.is_ok,
                 "Adapter must be online after start()",
             )
             _ensure(
@@ -63,7 +63,7 @@ def test_stub_adapter_lifecycle_health_states() -> None:
                 "Adapter timestamp must be monotonic across stop()",
             )
             _ensure(
-                adapter.health.online is False,
+                adapter.health.is_failed,
                 "Adapter must be offline after stop()",
             )
             _ensure(
@@ -87,8 +87,8 @@ def test_unimplemented_delta_adapters_stay_offline_after_start() -> None:
         for adapter in adapters:
             await adapter.start(bus)
             _ensure(
-                adapter.health.online is False,
-                "Unimplemented adapter must stay offline after start()",
+                adapter.health.is_degraded,
+                "Unimplemented adapter must stay degraded after start()",
             )
             _ensure(
                 adapter.health.detail == "not implemented",
