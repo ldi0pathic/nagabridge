@@ -89,8 +89,8 @@ def test_stub_adapter_lifecycle_health_states() -> None:
     asyncio.run(scenario())
 
 
-def test_unimplemented_delta_adapters_stay_offline_after_start() -> None:
-    """Delta stubs must not report production readiness before Type7 exists."""
+def test_delta_adapters_start_in_prototype_mode() -> None:
+    """Delta adapters should expose prototype mode until BLE protocol is integrated."""
 
     async def scenario() -> None:
         bus = EventBus()
@@ -103,11 +103,11 @@ def test_unimplemented_delta_adapters_stay_offline_after_start() -> None:
             await adapter.start(bus)
             _ensure(
                 adapter.health.is_degraded,
-                "Unimplemented adapter must stay degraded after start()",
+                "Prototype adapter must stay degraded after start()",
             )
             _ensure(
-                adapter.health.detail == "not implemented",
-                "Unimplemented adapter detail must explain unavailable state",
+                adapter.health.detail == "prototype mode",
+                "Prototype adapter detail must explain provisional runtime state",
             )
 
     asyncio.run(scenario())

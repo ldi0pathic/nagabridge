@@ -35,6 +35,11 @@ Der MQTT-Adapter mappt diese Topics standardmaessig auf:
 - `nagabridge/ecoflow/powerstream/bat_state`
 - `nagabridge/ecoflow/powerstream/command` (Inbound-Command Richtung Adapter)
 
+Optional kann der MQTT-Topic-Vertrag versioniert werden. Dann lautet das Schema:
+
+- `nagabridge/v<version>/<domain>/<entity>/<type>`
+- Beispiel: `nagabridge/v1/ecoflow/powerstream/state`
+
 Beispiel fuer einen Command via MQTT:
 
 - Topic: `nagabridge/ecoflow/powerstream/command`
