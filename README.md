@@ -33,6 +33,13 @@ Der MQTT-Adapter mappt diese Topics standardmaessig auf:
 
 - `nagabridge/ecoflow/powerstream/state`
 - `nagabridge/ecoflow/powerstream/bat_state`
+- `nagabridge/ecoflow/powerstream/command` (Inbound-Command Richtung Adapter)
+
+Beispiel fuer einen Command via MQTT:
+
+- Topic: `nagabridge/ecoflow/powerstream/command`
+- Payload: `{"command":"get_status"}`
+- Payload: `{"command":"set_load_power","watts":250}`
 
 In ioBroker erscheinen sie entsprechend als:
 
