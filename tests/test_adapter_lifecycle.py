@@ -44,8 +44,12 @@ def test_stub_adapter_lifecycle_health_states() -> None:
             health_published: list[dict[str, object]] = []
             topic = f"system/health/{adapter.name.lower()}"
 
-            async def health_handler(_t: str, payload: dict[str, object]) -> None:
-                health_published.append(payload)
+            async def health_handler(
+                _t: str,
+                payload: dict[str, object],
+                _published: list[dict[str, object]] = health_published,
+            ) -> None:
+                _published.append(payload)
 
             await bus.subscribe(topic, health_handler)
             await adapter.start(bus)
