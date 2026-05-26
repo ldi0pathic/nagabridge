@@ -9,6 +9,9 @@ from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthState, HealthStatus
 from nagabridge.core.topics import command_topic, health_topic, state_topic
 
+from .parser import parse_payload
+from .protocol import encode_command
+
 _MODULE = __name__.rsplit(".", 1)[0]
 
 
@@ -22,6 +25,7 @@ class Delta2MaxAdapter(Adapter):
         self._health = HealthStatus()
         self._bus: EventBus | None = None
         self._maintain_task: asyncio.Task[None] | None = None
+        self._last_encoded_command: bytes | None = None
         self._state: dict[str, object] = {
             "message_type": "delta2max_status",
             "online": False,
@@ -96,7 +100,18 @@ class Delta2MaxAdapter(Adapter):
             self._state["heartbeat"] = int(self.health.timestamp)
             await self._publish_state()
 
+    async def on_ble_notification(self, payload: bytes) -> None:
+        self._state.update(parse_payload(payload))
+        await self._publish_state()
+
     async def _on_command(self, _topic: str, payload: dict[str, object]) -> None:
-        command = payload.get("command") or payload.get("type")
+        command = str(payload.get("command") or payload.get("type") or "")
         if command in {"get_status", "refresh"}:
+            await self._publish_state()
+            self._last_encoded_command = encode_command(command, payload)
+            return
+        try:
+            self._last_encoded_command = encode_command(command, payload)
+        except ValueError:
+            self._state["last_error"] = f"unsupported_command:{command}"
             await self._publish_state()
