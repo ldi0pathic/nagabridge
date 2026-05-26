@@ -31,6 +31,7 @@ class _SupportsMqttClient(Protocol):
         retain: bool,
     ) -> None: ...
     def subscribe(self, topic: str) -> object: ...
+
     on_message: object
 
 
