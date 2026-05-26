@@ -41,7 +41,6 @@ Beispiele:
 * ecoflow/delta2max/state
 * ecoflow/powerstream/command
 * system/nagabridge/shutdown
-* mqtt/connection/state
 
 ### 2. Event-Typen über Topic definiert
 

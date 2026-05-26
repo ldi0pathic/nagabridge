@@ -286,14 +286,22 @@ def test_stop_unsubscribes_and_disconnects() -> None:
         connection = FakeConnection(BleConnectionConfig(address="a", notify_uuid="n", write_uuid="w"))
         bus = EventBus()
         adapter = PowerstreamAdapter(_config(), connection_factory=lambda _cfg: connection, crypto_factory=lambda _serial: FakeCrypto("SN123"))  # type: ignore[arg-type]
+        health_published: list[dict[str, object]] = []
 
+        async def health_handler(_topic: str, payload: dict[str, object]) -> None:
+            health_published.append(payload)
+
+        await bus.subscribe("system/health/powerstream", health_handler)
         await adapter.start(bus)
         await adapter.stop()
+        await asyncio.sleep(0)
 
         assert connection.disconnected
         assert bus.subscriber_count("ecoflow/powerstream/command") == 0
         assert adapter.health.is_failed
         assert adapter.health.detail == "stopped"
+        stopped_payloads = [p for p in health_published if p.get("detail") == "stopped"]
+        assert stopped_payloads, "'stopped' health was never published to the bus"
 
     asyncio.run(scenario())
 
