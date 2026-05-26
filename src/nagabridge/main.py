@@ -90,6 +90,15 @@ def _build_ble_adapter(device: BleDeviceConfig) -> Adapter:
     return factory(device)
 
 
+def _collect_inbound_mqtt_topics(adapters: list[Adapter], prefix: str) -> list[str]:
+    topics: list[str] = []
+    for adapter in adapters:
+        command_topic = getattr(getattr(adapter, "_config", object()), "command_topic", None)
+        if isinstance(command_topic, str) and command_topic:
+            topics.append(f"{prefix}/{command_topic}")
+    return topics
+
+
 def build_adapters_from_config(
     config_path: Path = DEFAULT_CONFIG_PATH,
     *,
@@ -109,6 +118,7 @@ def build_adapters_from_config(
                     user=cfg.mqtt.user,
                     password=cfg.mqtt.password,
                     subscribe_topics=[t for a in adapters for t in a.published_topics],
+                    inbound_topics=_collect_inbound_mqtt_topics(adapters, "nagabridge"),
                 )
             ),
         )

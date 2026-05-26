@@ -1,5 +1,6 @@
-"""MQTT adapter that forwards bus events to a broker."""
+"""MQTT adapter that forwards bus events to and from a broker."""
 
+import asyncio
 import json
 import logging
 from collections.abc import Callable
@@ -29,6 +30,8 @@ class _SupportsMqttClient(Protocol):
         *,
         retain: bool,
     ) -> None: ...
+    def subscribe(self, topic: str) -> object: ...
+    on_message: object
 
 
 @dataclass(slots=True)
@@ -40,6 +43,7 @@ class MqttAdapterConfig:
     user: str | None = None
     password: str | None = None
     subscribe_topics: list[str] = field(default_factory=list)
+    inbound_topics: list[str] = field(default_factory=list)
     publish_prefix: str = "nagabridge"
 
 
@@ -95,6 +99,9 @@ class MqttAdapter(Adapter):
 
         for topic in self._config.subscribe_topics:
             await bus.subscribe(topic, self._on_bus_event)
+        for topic in self._config.inbound_topics:
+            self._client.subscribe(topic)
+        self._client.on_message = self._on_mqtt_message
 
         self._health = HealthStatus(
             state=HealthState.ok,
@@ -133,6 +140,37 @@ class MqttAdapter(Adapter):
         mqtt_topic = self._map_topic(topic)
         self._client.publish(mqtt_topic, json.dumps(payload), qos=0, retain=False)
 
+    def _on_mqtt_message(self, _client: object, _userdata: object, msg: object) -> None:
+        """Forward inbound MQTT messages onto the internal event bus."""
+        if self._bus is None:
+            return
+        topic = getattr(msg, "topic", "")
+        payload_bytes = getattr(msg, "payload", b"")
+        try:
+            payload = json.loads(payload_bytes.decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("payload must decode to JSON object")
+        except Exception:
+            self._log.warning("Ignoring invalid inbound MQTT payload on topic %s", topic, exc_info=True)
+            return
+        bus_topic = self._unmap_topic(topic)
+        if bus_topic is None:
+            self._log.debug("Ignoring inbound MQTT message outside prefix: %s", topic)
+            return
+        self._run_publish_from_callback(bus_topic, payload)
+
+    def _run_publish_from_callback(self, topic: Topic, payload: Payload) -> None:
+        """Schedule async publish from sync MQTT callback context."""
+        loop = asyncio.get_running_loop()
+        loop.create_task(self._bus.publish(topic, payload))  # type: ignore[union-attr]
+
     def _map_topic(self, topic: Topic) -> str:
         """Map an internal bus topic to an MQTT topic path."""
         return f"{self._config.publish_prefix}/{topic}"
+
+    def _unmap_topic(self, topic: Topic) -> Topic | None:
+        """Map MQTT topic with configured prefix back to internal bus topic."""
+        prefix = f"{self._config.publish_prefix}/"
+        if not topic.startswith(prefix):
+            return None
+        return topic[len(prefix) :]

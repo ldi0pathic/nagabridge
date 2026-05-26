@@ -21,6 +21,8 @@ class FakeMqttClient:
         self.loop_running = False
         self.auth: tuple[str, str | None] | None = None
         self.published: list[tuple[str, str, int, bool]] = []
+        self.subscribed: list[str] = []
+        self.on_message: object | None = None
 
     def username_pw_set(self, user: str, password: str | None = None) -> None:
         """Store provided credentials."""
@@ -54,6 +56,24 @@ class FakeMqttClient:
     ) -> None:
         """Capture publish calls for assertions."""
         self.published.append((topic, payload, qos, retain))
+
+    def subscribe(self, topic: str) -> tuple[int, int]:
+        """Capture subscribe calls for assertions."""
+        self.subscribed.append(topic)
+        return (0, 1)
+
+    def inject_message(self, topic: str, payload: dict[str, object]) -> None:
+        """Invoke callback like paho would do for inbound MQTT messages."""
+        callback = self.on_message
+        if not callable(callback):
+            raise AssertionError("on_message callback missing")
+
+        class Msg:
+            def __init__(self, msg_topic: str, msg_payload: bytes) -> None:
+                self.topic = msg_topic
+                self.payload = msg_payload
+
+        callback(self, None, Msg(topic, json.dumps(payload).encode("utf-8")))
 
 
 class _MqttMessage(Protocol):
@@ -169,6 +189,43 @@ def test_mqtt_adapter_with_empty_subscribe_topics_still_starts() -> None:
         _ensure(adapter.health.is_ok, "Adapter should be online after start")
         _ensure(bus.topics == [], "No topics should be subscribed")
 
+        await adapter.stop()
+
+    asyncio.run(scenario())
+
+
+def test_mqtt_adapter_forwards_inbound_command_to_bus() -> None:
+    """Adapter should route inbound MQTT command topic to event bus."""
+
+    async def scenario() -> None:
+        bus = EventBus()
+        fake_client = FakeMqttClient()
+        adapter = MqttAdapter(
+            MqttAdapterConfig(
+                host="broker.local",
+                inbound_topics=["nagabridge/ecoflow/powerstream/command"],
+            ),
+            client_factory=lambda: fake_client,
+        )
+
+        received: list[tuple[str, dict[str, object]]] = []
+
+        async def handler(topic: str, payload: dict[str, object]) -> None:
+            received.append((topic, payload))
+
+        await bus.subscribe("ecoflow/powerstream/command", handler)
+        await adapter.start(bus)
+        fake_client.inject_message("nagabridge/ecoflow/powerstream/command", {"command": "get_status"})
+        await asyncio.sleep(0.05)
+
+        _ensure(
+            received == [("ecoflow/powerstream/command", {"command": "get_status"})],
+            "Inbound command should be republished to bus command topic",
+        )
+        _ensure(
+            fake_client.subscribed == ["nagabridge/ecoflow/powerstream/command"],
+            "MQTT adapter should subscribe to configured inbound topics",
+        )
         await adapter.stop()
 
     asyncio.run(scenario())
