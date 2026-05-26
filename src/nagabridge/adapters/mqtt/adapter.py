@@ -46,6 +46,7 @@ class MqttAdapterConfig:
     subscribe_topics: list[str] = field(default_factory=list)
     inbound_topics: list[str] = field(default_factory=list)
     publish_prefix: str = "nagabridge"
+    topic_contract_version: int | None = None
 
 
 class MqttAdapter(Adapter):
@@ -167,11 +168,16 @@ class MqttAdapter(Adapter):
 
     def _map_topic(self, topic: Topic) -> str:
         """Map an internal bus topic to an MQTT topic path."""
-        return f"{self._config.publish_prefix}/{topic}"
+        if self._config.topic_contract_version is None:
+            return f"{self._config.publish_prefix}/{topic}"
+        return f"{self._config.publish_prefix}/v{self._config.topic_contract_version}/{topic}"
 
     def _unmap_topic(self, topic: Topic) -> Topic | None:
         """Map MQTT topic with configured prefix back to internal bus topic."""
-        prefix = f"{self._config.publish_prefix}/"
+        if self._config.topic_contract_version is None:
+            prefix = f"{self._config.publish_prefix}/"
+        else:
+            prefix = f"{self._config.publish_prefix}/v{self._config.topic_contract_version}/"
         if not topic.startswith(prefix):
             return None
         return topic[len(prefix) :]

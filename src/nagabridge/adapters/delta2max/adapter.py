@@ -1,18 +1,19 @@
-"""Delta 2 Max adapter implementation."""
+"""Delta 2 Max adapter implementation (prototype telemetry + command handling)."""
 
+import asyncio
 import logging
 
 from nagabridge.core.adapter import Adapter
 from nagabridge.core.bus import EventBus
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthState, HealthStatus
-from nagabridge.core.topics import health_topic
+from nagabridge.core.topics import command_topic, health_topic, state_topic
 
 _MODULE = __name__.rsplit(".", 1)[0]
 
 
 class Delta2MaxAdapter(Adapter):
-    """Adapter stub for Delta 2 Max devices."""
+    """Prototype adapter for Delta 2 Max devices."""
 
     def __init__(self, config: BleDeviceConfig) -> None:
         """Initialize the adapter with BLE device configuration."""
@@ -20,6 +21,12 @@ class Delta2MaxAdapter(Adapter):
         self._log = logging.getLogger(f"{_MODULE}.{config.name.lower().replace(' ', '-')}")
         self._health = HealthStatus()
         self._bus: EventBus | None = None
+        self._maintain_task: asyncio.Task[None] | None = None
+        self._state: dict[str, object] = {
+            "message_type": "delta2max_status",
+            "online": False,
+            "mode": "prototype",
+        }
 
     @property
     def name(self) -> str:
@@ -37,10 +44,14 @@ class Delta2MaxAdapter(Adapter):
         return self._health
 
     async def start(self, bus: EventBus) -> None:
-        """Start the adapter lifecycle."""
+        """Start the adapter lifecycle in prototype mode."""
         self._bus = bus
-        self._health = HealthStatus(state=HealthState.degraded, detail="not implemented")
+        await bus.subscribe(command_topic(self._config.domain, self._config.name), self._on_command)
+        self._state["online"] = True
+        await self._publish_state()
+        self._health = HealthStatus(state=HealthState.degraded, detail="prototype mode")
         await self._publish_health()
+        self._maintain_task = asyncio.create_task(self._maintain_loop())
 
     @property
     def published_topics(self) -> list[str]:
@@ -48,6 +59,11 @@ class Delta2MaxAdapter(Adapter):
         from nagabridge.core.topics import state_topic
 
         return [state_topic(self._config.domain, self._config.name)]
+
+    async def _publish_state(self) -> None:
+        if self._bus is None:
+            return
+        await self._bus.publish(state_topic(self._config.domain, self._config.name), dict(self._state))
 
     async def _publish_health(self) -> None:
         if self._bus is None:
@@ -59,6 +75,28 @@ class Delta2MaxAdapter(Adapter):
 
     async def stop(self) -> None:
         """Stop the adapter lifecycle."""
+        if self._maintain_task is not None:
+            self._maintain_task.cancel()
+            try:
+                await self._maintain_task
+            except asyncio.CancelledError:
+                pass
+            self._maintain_task = None
+        if self._bus is not None:
+            await self._bus.unsubscribe(command_topic(self._config.domain, self._config.name), self._on_command)
+        self._state["online"] = False
+        await self._publish_state()
         self._health = HealthStatus(state=HealthState.failed, detail="stopped")
         await self._publish_health()
         self._bus = None
+
+    async def _maintain_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self._config.poll_interval_seconds or 30.0)
+            self._state["heartbeat"] = int(self.health.timestamp)
+            await self._publish_state()
+
+    async def _on_command(self, _topic: str, payload: dict[str, object]) -> None:
+        command = payload.get("command") or payload.get("type")
+        if command in {"get_status", "refresh"}:
+            await self._publish_state()

@@ -315,11 +315,11 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
         )
         _ensure(
             adapters[1].health.is_degraded,
-            "Unimplemented Delta2 adapter should stay degraded after start",
+            "Prototype Delta2 adapter should stay degraded after start",
         )
         _ensure(
-            adapters[1].health.detail == "not implemented",
-            "Unimplemented Delta2 adapter should report not implemented",
+            adapters[1].health.detail == "prototype mode",
+            "Prototype Delta2 adapter should report prototype mode",
         )
 
         shutdown_event.set()
