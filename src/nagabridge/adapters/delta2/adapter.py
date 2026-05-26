@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import Any
 
 from nagabridge.core.adapter import Adapter
-from nagabridge.core.ble import BleConnection, BleConnectionConfig, BleakClientAdapter
+from nagabridge.core.ble import BleakClientAdapter, BleConnection, BleConnectionConfig
 from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthState, HealthStatus
