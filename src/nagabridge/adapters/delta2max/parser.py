@@ -1,15 +1,24 @@
 """Parsing helpers for Delta 2 Max payloads."""
 
+from __future__ import annotations
+
 from typing import Any
 
+ALLOWED_STATE_FIELDS = {
+    "online",
+    "ac_output_enabled",
+    "dc_output_enabled",
+    "battery_percent",
+    "input_watts_total",
+    "input_xt60_1_watts",
+    "input_xt60_2_watts",
+    "output_watts",
+    "temperature_c",
+    "last_command",
+    "last_error",
+}
 
-def parse_payload(raw: bytes) -> dict[str, Any]:
-    """Parse a raw Delta 2 Max payload into a normalized dictionary."""
-    if len(raw) >= 3:
-        return {
-            "message_type": "delta2max_status",
-            "ac_output_watts": int(raw[0]),
-            "battery_soc": int(raw[1]),
-            "dual_xt60_input_watts": int(raw[2]),
-        }
-    return {"raw_len": len(raw)}
+
+def sanitize_state(payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep only model-valid, stable Delta 2 Max state fields."""
+    return {key: payload[key] for key in ALLOWED_STATE_FIELDS if key in payload}

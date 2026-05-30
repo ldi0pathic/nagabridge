@@ -89,25 +89,36 @@ def test_stub_adapter_lifecycle_health_states() -> None:
     asyncio.run(scenario())
 
 
-def test_delta_adapters_start_in_prototype_mode() -> None:
-    """Delta adapters should expose prototype mode until BLE protocol is integrated."""
+def test_delta2_starts_with_ble_connection_and_delta2max_remains_prototype() -> None:
+    """Delta2 should use BLE while Delta2Max remains in prototype mode."""
 
     async def scenario() -> None:
         bus = EventBus()
-        adapters = [
-            Delta2Adapter(_cfg("Delta2", "delta2")),
-            Delta2MaxAdapter(_cfg("Delta2Max", "delta2max")),
-        ]
+        delta2_connections: list[FakeConnection] = []
 
-        for adapter in adapters:
-            await adapter.start(bus)
-            _ensure(
-                adapter.health.is_degraded,
-                "Prototype adapter must stay degraded after start()",
-            )
-            _ensure(
-                adapter.health.detail == "prototype mode",
-                "Prototype adapter detail must explain provisional runtime state",
-            )
+        def delta2_connection_factory(config: object) -> FakeConnection:
+            connection = FakeConnection(config)  # type: ignore[arg-type]
+            delta2_connections.append(connection)
+            return connection
+
+        delta2 = Delta2Adapter(_cfg("Delta2", "delta2"), connection_factory=delta2_connection_factory)  # type: ignore[arg-type]
+        delta2max = Delta2MaxAdapter(_cfg("Delta2Max", "delta2max"))
+
+        await delta2.start(bus)
+        _ensure(delta2.health.is_ok, "Delta2 BLE adapter must be online after start()")
+        _ensure(delta2.health.detail == "running", "Delta2 BLE adapter detail must report running state")
+        _ensure(delta2_connections[0].connected, "Delta2 BLE adapter must connect to BLE on start()")
+        await delta2.stop()
+
+        await delta2max.start(bus)
+        _ensure(
+            delta2max.health.is_degraded,
+            "Delta2Max prototype adapter must stay degraded after start()",
+        )
+        _ensure(
+            delta2max.health.detail == "prototype mode",
+            "Delta2Max prototype adapter detail must explain provisional runtime state",
+        )
+        await delta2max.stop()
 
     asyncio.run(scenario())

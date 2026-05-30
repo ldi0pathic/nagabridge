@@ -299,7 +299,10 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
             connection_factory=lambda cfg: FakeConnection(cfg),
             crypto_factory=lambda _sn: FakeCrypto("SN123"),
         ),
-        Delta2Adapter(BleDeviceConfig("Delta2", "AA:BB:CC:DD:EE:FE", "delta2")),
+        Delta2Adapter(
+            BleDeviceConfig("Delta2", "AA:BB:CC:DD:EE:FE", "delta2"),
+            connection_factory=lambda cfg: FakeConnection(cfg),
+        ),
     ]
 
     async def scenario() -> None:
@@ -314,12 +317,12 @@ def test_run_all_adapters_offline_after_shutdown() -> None:
             "Implemented PowerStream adapter should be online after start",
         )
         _ensure(
-            adapters[1].health.is_degraded,
-            "Prototype Delta2 adapter should stay degraded after start",
+            adapters[1].health.is_ok,
+            "Implemented Delta2 adapter should be online after start",
         )
         _ensure(
-            adapters[1].health.detail == "prototype mode",
-            "Prototype Delta2 adapter should report prototype mode",
+            adapters[1].health.detail == "running",
+            "Implemented Delta2 adapter should report running state",
         )
 
         shutdown_event.set()
