@@ -25,3 +25,19 @@ def parse_status_payload(raw: bytes) -> dict[str, Any]:
         "xt60_input_watts": int.from_bytes(raw[6:8], "big"),
         "ac_output_enabled": bool(raw[8]),
     }
+
+
+def parse_payload(raw: bytes) -> dict[str, Any]:
+    """Parse the compact Delta 2 status payload used by legacy BLE tests.
+
+    The compact payload maps byte 0 to AC output watts and byte 1 to
+    battery state of charge.  Short payloads are returned as an unknown
+    message rather than raising so callers can safely publish diagnostics.
+    """
+    if len(raw) < 2:
+        return {"message_type": "unknown", "raw_len": len(raw), "raw_hex": raw.hex()}
+    return {
+        "message_type": "delta2_status",
+        "ac_output_watts": raw[0],
+        "battery_soc": raw[1],
+    }
