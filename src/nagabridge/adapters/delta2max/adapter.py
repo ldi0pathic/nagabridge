@@ -63,7 +63,7 @@ class Delta2MaxAdapter(Adapter):
         await bus.subscribe(COMMAND_TOPIC, self._on_command)
         self._state["online"] = True
         await self._publish_state()
-        self._health = HealthStatus(state=HealthState.ok, detail="running")
+        self._health = HealthStatus(state=HealthState.degraded, detail="prototype mode")
         await self._publish_health()
         self._maintain_task = asyncio.create_task(self._maintain_loop())
 
