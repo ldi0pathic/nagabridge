@@ -19,6 +19,7 @@ def test_start_stop_lifecycle() -> None:
         assert bus.subscriber_count(command_topic("ecoflow", "Delta2Max")) == 1
         await adapter.stop()
         assert adapter.health.is_failed
+
     asyncio.run(scenario())
 
 
@@ -28,8 +29,10 @@ def test_ble_notification_updates_state_mapping() -> None:
         adapter = Delta2MaxAdapter(delta2max_config())
         await adapter.start(bus)
         states: list[dict[str, object]] = []
+
         async def recorder(_topic: str, payload: dict[str, object]) -> None:
             states.append(payload)
+
         await bus.subscribe(state_topic("ecoflow", "Delta2Max"), recorder)
         await adapter.on_ble_notification(bytes([140, 70, 35]))
         await asyncio.sleep(0)
@@ -38,6 +41,7 @@ def test_ble_notification_updates_state_mapping() -> None:
         assert state["battery_soc"] == 70
         assert state["dual_xt60_input_watts"] == 35
         await adapter.stop()
+
     asyncio.run(scenario())
 
 
@@ -52,8 +56,10 @@ def test_command_payload_encodes_packet_and_unsupported_command() -> None:
         assert adapter._last_encoded_command == bytes([0xB1, 88])  # type: ignore[attr-defined]
 
         states: list[dict[str, object]] = []
+
         async def recorder(_topic: str, payload: dict[str, object]) -> None:
             states.append(payload)
+
         await bus.subscribe(state_topic("ecoflow", "Delta2Max"), recorder)
         await bus.publish(command_topic("ecoflow", "Delta2Max"), {"command": "unsupported_x"})
         await asyncio.sleep(0.01)
