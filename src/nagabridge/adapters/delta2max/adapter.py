@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from nagabridge.core.adapter import Adapter
-from nagabridge.core.bus import EventBus
+from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthState, HealthStatus
 from nagabridge.core.topics import health_topic
@@ -99,7 +99,7 @@ class Delta2MaxAdapter(Adapter):
             self._state["input_watts_total"] = int(self._state["input_xt60_1_watts"]) + int(self._state["input_xt60_2_watts"])
             await self._publish_state()
 
-    async def _on_command(self, _topic: str, payload: dict[str, object]) -> None:
+    async def _on_command(self, _topic: Topic, payload: Payload) -> None:
         try:
             self._last_encoded_command = self._legacy_encoded_command(payload)
             command = map_command(payload)
@@ -138,7 +138,7 @@ class Delta2MaxAdapter(Adapter):
         raise ValueError(msg)
 
     @staticmethod
-    def _legacy_encoded_command(payload: dict[str, object]) -> bytes:
+    def _legacy_encoded_command(payload: Payload) -> bytes:
         command = payload.get("command") or payload.get("type")
         if command == "set_ac_output":
             return bytes((0xB1, max(0, min(255, int(payload.get("watts", 0))))))
