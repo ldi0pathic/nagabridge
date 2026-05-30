@@ -7,12 +7,12 @@ import logging
 from typing import Any
 
 from nagabridge.core.adapter import Adapter
-from nagabridge.core.bus import EventBus
+from nagabridge.core.bus import EventBus, Payload, Topic
 from nagabridge.core.config import BleDeviceConfig
 from nagabridge.core.health import HealthState, HealthStatus
 from nagabridge.core.topics import health_topic
 
-from .parser import sanitize_state
+from .parser import parse_payload, sanitize_state
 from .protocol import Delta2MaxCommand, map_command
 
 _MODULE = __name__.rsplit(".", 1)[0]
@@ -85,6 +85,12 @@ class Delta2MaxAdapter(Adapter):
         await self._publish_health()
         self._bus = None
 
+    async def on_ble_notification(self, data: bytes) -> None:
+        """Handle compact legacy BLE notification payloads."""
+        self._state.update(parse_payload(data))
+        self._state["online"] = True
+        await self._publish_state()
+
     async def _maintain_loop(self) -> None:
         interval = self._config.poll_interval_seconds or DEFAULT_POLL_INTERVAL_SECONDS
         while True:
@@ -93,11 +99,15 @@ class Delta2MaxAdapter(Adapter):
             self._state["input_watts_total"] = int(self._state["input_xt60_1_watts"]) + int(self._state["input_xt60_2_watts"])
             await self._publish_state()
 
-    async def _on_command(self, _topic: str, payload: dict[str, object]) -> None:
+    async def _on_command(self, _topic: Topic, payload: Payload) -> None:
         try:
+            self._last_encoded_command = self._legacy_encoded_command(payload)
             command = map_command(payload)
             if command is None:
+                command_name = payload.get("command") or payload.get("type")
+                self._state["last_error"] = f"unsupported_command:{command_name}"
                 self._log.debug("Ignoring unsupported Delta2Max command payload: %s", payload)
+                await self._publish_state()
                 return
             await self._apply_command(command)
             await self._publish_state()
@@ -126,6 +136,13 @@ class Delta2MaxAdapter(Adapter):
             return
         msg = f"Unknown Delta2Max internal op: {command.op}"
         raise ValueError(msg)
+
+    @staticmethod
+    def _legacy_encoded_command(payload: Payload) -> bytes:
+        command = payload.get("command") or payload.get("type")
+        if command == "set_ac_output":
+            return bytes((0xB1, max(0, min(255, int(payload.get("watts", 0))))))
+        return b""
 
     async def _publish_state(self) -> None:
         if self._bus is None:

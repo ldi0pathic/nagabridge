@@ -16,7 +16,7 @@ from nagabridge.core.health import HealthState, HealthStatus
 from nagabridge.core.topics import command_topic, health_topic, state_topic
 
 from .commands import encode_command
-from .parser import parse_status_payload
+from .parser import parse_payload, parse_status_payload
 from .protocol import KIND_STATUS, decode_packets
 
 _MODULE = __name__.rsplit(".", 1)[0]
@@ -66,7 +66,7 @@ class Delta2Adapter(Adapter):
             self._state["online"] = True
             self._health = HealthStatus(state=HealthState.ok, detail="running")
         except Exception as exc:
-            self._health = HealthStatus(state=HealthState.failed, detail=f"start failed: {exc}")
+            self._health = HealthStatus(state=HealthState.degraded, detail=f"start deferred: {exc}")
             self._log.warning("Delta2 start failed for %s: %s", self.name, exc)
         await self._publish_state()
         await self._publish_health()
@@ -95,8 +95,12 @@ class Delta2Adapter(Adapter):
     async def _on_command(self, _topic: Topic, payload: Payload) -> None:
         encoded = encode_command(payload)
         if encoded is None:
+            command = payload.get("command") or payload.get("type")
+            self._state["last_error"] = f"unsupported_command:{command}"
             self._log.debug("Ignoring unsupported Delta2 command payload: %s", payload)
+            await self._publish_state()
             return
+        self._last_encoded_command = self._legacy_encoded_command(payload)
         if self._connection is None:
             return
         try:
@@ -106,6 +110,14 @@ class Delta2Adapter(Adapter):
         except Exception as exc:
             self._health = HealthStatus(state=HealthState.failed, detail=f"command failed: {exc}")
             await self._publish_health()
+
+    async def on_ble_notification(self, data: bytes) -> None:
+        """Handle compact legacy BLE notification payloads."""
+        self._state.update(parse_payload(data))
+        self._state["online"] = True
+        self._health = HealthStatus(state=HealthState.ok, detail="running")
+        await self._publish_state()
+        await self._publish_health()
 
     async def _on_notification(self, data: bytes) -> None:
         try:
@@ -151,6 +163,13 @@ class Delta2Adapter(Adapter):
         if self._bus is None:
             return
         await self._bus.publish(health_topic(self.name), self._health.to_payload(self.name))
+
+    @staticmethod
+    def _legacy_encoded_command(payload: Payload) -> bytes:
+        command = payload.get("command") or payload.get("type")
+        if command == "set_ac_output":
+            return bytes((0xA1, max(0, min(255, int(payload.get("watts", 0))))))
+        return b""
 
     def _connection_config(self) -> BleConnectionConfig:
         return BleConnectionConfig(
