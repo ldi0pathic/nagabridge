@@ -11,7 +11,6 @@ from typing import Any
 # [6..7] xt60_input_watts uint16
 # [8]    ac_output_enabled bool
 
-
 def parse_status_payload(raw: bytes) -> dict[str, Any]:
     """Parse Delta 2 status payload fields relevant for this adapter."""
     if len(raw) < 9:
